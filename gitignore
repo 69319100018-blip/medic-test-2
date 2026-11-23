@@ -1,0 +1,25 @@
+# Secrets
+.env
+api/.env
+**/.env
+**/.env.local
+
+# Dependencies
+node_modules/
+api/node_modules/
+
+# Logs & OS
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Build / temp
+dist/
+build/
+.tmp/
+*.bak

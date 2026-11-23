@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>Medic Shift Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="dashboard-body">
+    <div class="bg-blob blob-1"></div>
+    <div class="bg-blob blob-2"></div>
+    <div class="bg-blob blob-3"></div>
+    <div class="page page-dashboard">
+        <header class="topbar">
+            <div class="brand">
+                <img class="brand-logo" src="assets/images/talos.jpg" alt="Logo" id="brandAvatar">
+                <div class="brand-text">
+                    <strong>Medic Shift Log</strong>
+                    <small>ระบบตรวจสอบเข้า-ออกเวร</small>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <div class="time-label">
+                    <span><i class="bi bi-clock"></i> เวลา</span>
+                    <strong id="currentTime">00:00:00</strong>
+                </div>
+                <button id="btnLogout" class="btn btn-secondary btn-logout">
+                    <i class="bi bi-box-arrow-right"></i> ออกจากระบบ
+                </button>
+            </div>
+        </header>
+
+        <nav class="dashboard-nav">
+            <button class="nav-link active" data-target="overviewSection">
+                <i class="bi bi-grid-1x2"></i> ภาพรวม
+            </button>
+            <button class="nav-link" data-target="fundsSection">
+                <i class="bi bi-wallet2"></i> เงินกองกลาง
+            </button>
+            <button class="nav-link" data-target="stockSection">
+                <i class="bi bi-box-seam"></i> สต็อกอุปกรณ์
+            </button>
+            <button class="nav-link" data-target="vehicleSection">
+                <i class="bi bi-car-front"></i> ทะเบียนรถ
+            </button>
+            <button class="nav-link" data-target="doctorsSection">
+                <i class="bi bi-people"></i> รายชื่อแพทย์
+            </button>
+            <button class="nav-link" data-target="historySection">
+                <i class="bi bi-clock-history"></i> ประวัติ
+            </button>
+            <button class="nav-link" data-target="stockHistorySection">
+                <i class="bi bi-clipboard2-data"></i> ประวัติการเบิก
+            </button>
+            <button class="nav-link" data-target="adminSection">
+                <i class="bi bi-shield-check"></i> ตรวจสอบ
+            </button>
+            <button class="nav-link hidden" data-target="securitySection" id="navSecurity">
+                <i class="bi bi-shield-lock"></i> ความปลอดภัย
+            </button>
+            <button class="nav-link hidden" data-target="membersSection" id="navMembers">
+                <i class="bi bi-person-gear"></i> สมาชิก / Role
+            </button>
+            <button class="nav-link hidden" data-target="intelSection" id="navIntel" title="เมนูลับ">
+                <i class="bi bi-radar"></i> Intel
+            </button>
+        </nav>
+
+        <main class="dashboard-grid">
+            <section class="panel panel-profile" id="overviewSection">
+                <div class="profile-header">
+                    <div class="avatar-wrap" id="avatarWrap">
+                        <img id="userAvatar" class="avatar" src="" alt="Avatar">
+                        <span class="avatar-status" id="avatarStatusDot"></span>
+                        <button type="button" class="avatar-edit-btn" id="btnEditAvatar" title="เปลี่ยนรูปโปรไฟล์">
+                            <i class="bi bi-camera-fill"></i>
+                        </button>
+                    </div>
+                    <div>
+                        <p class="label">ผู้ใช้งาน</p>
+                        <h2 id="profileName"></h2>
+                        <p class="subtext" id="profileRole"></p>
+                        <button type="button" class="btn btn-secondary btn-small" id="btnChangeAvatar" style="margin-top:8px;">
+                            <i class="bi bi-camera-fill"></i> เปลี่ยนรูปโปรไฟล์
+                        </button>
+                    </div>
+                </div>
+                <div id="avatarPickerPanel" class="avatar-picker-panel hidden">
+                    <div class="avatar-picker-head">
+                        <strong>เลือกรูปโปรไฟล์</strong>
+                        <button type="button" class="music-help-close" id="btnCloseAvatarPicker" aria-label="ปิด">&times;</button>
+                    </div>
+                    <p class="help-text" style="margin-bottom:10px;">เลือกจากรูปที่มี หรืออัปโหลดจากเครื่อง (ย่ออัตโนมัติ)</p>
+                    <div id="avatarPresetGrid" class="avatar-preset-grid"></div>
+                    <div class="fund-actions" style="margin-top:12px;flex-wrap:wrap;gap:8px;">
+                        <label class="btn btn-secondary btn-small" style="cursor:pointer;margin:0;">
+                            <i class="bi bi-upload"></i> อัปโหลดจากเครื่อง
+                            <input type="file" id="avatarFileInput" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" hidden>
+                        </label>
+                        <button type="button" class="btn btn-tertiary btn-small" id="btnResetAvatar">คืนรูปเริ่มต้น</button>
+                    </div>
+                </div>
+                <div class="profile-stat">
+                    <span>สถานะปัจจุบัน</span>
+                    <strong id="userStatus">ยังไม่เข้าเวร</strong>
+                </div>
+                <div class="action-grid">
+                    <button id="btnCheckIn" class="btn btn-success">
+                        <i class="bi bi-check-circle-fill"></i> เข้าเวร
+                    </button>
+                    <button id="btnCheckOut" class="btn btn-danger" disabled>
+                        <i class="bi bi-door-open"></i> ออกเวร
+                    </button>
+                </div>
+                <div class="quick-links">
+                    <button id="btnManual" class="btn btn-tertiary">
+                        <i class="bi bi-pencil-square"></i> กรอกเวลา
+                    </button>
+                    <button id="btnRules" class="btn btn-tertiary">
+                        <i class="bi bi-journal-text"></i> เว็บกฎ
+                    </button>
+                </div>
+            </section>
+
+            <section class="panel panel-funds hidden" id="fundsSection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">เงินกองกลาง</p>
+                        <h2>บริหารเงินกองกลาง</h2>
+                    </div>
+                    <span id="fundBalanceSummary" class="date-pill">ยอดรวม 0 บาท</span>
+                </div>
+                <div class="fund-layout">
+                    <div class="fund-card fund-chart-card">
+                        <h3>แผนภูมิแท่งสรุปเงินกองกลาง</h3>
+                        <div class="fund-chart-wrap">
+                            <div id="fundChart" class="fund-chart"></div>
+                            <div id="fundChartLegend" class="fund-legend"></div>
+                        </div>
+                    </div>
+                    <div class="fund-right-col">
+                        <div class="fund-card">
+                            <h3>ฝากเงิน / ถอนเงินกองกลาง</h3>
+                            <label>
+                                จำนวนเงิน
+                                <input id="fundAmountInput" type="number" min="0" step="100" placeholder="กรอกจำนวนเงิน">
+                            </label>
+                            <label>
+                                หมายเหตุ
+                                <input id="fundNoteInput" type="text" placeholder="ระบุหมายเหตุ">
+                            </label>
+                            <div class="fund-actions">
+                                <button id="btnFundDeposit" class="btn btn-success" type="button">ฝากเงิน</button>
+                                <button id="btnFundWithdraw" class="btn btn-danger" type="button">ถอนเงิน</button>
+                            </div>
+                        </div>
+                        <div class="fund-card">
+                            <h3>ยอดรวมเงินทั้งหมด</h3>
+                            <p id="fundTotalValue" class="fund-total">0 บาท</p>
+                            <div class="fund-cumulative">
+                                <div class="fund-cum-item fund-cum-income">
+                                    <span>รายรับสะสม</span>
+                                    <strong id="fundIncomeTotal">0 บาท</strong>
+                                </div>
+                                <div class="fund-cum-item fund-cum-expense">
+                                    <span>รายจ่ายสะสม</span>
+                                    <strong id="fundExpenseTotal">0 บาท</strong>
+                                </div>
+                            </div>
+                            <div id="fundSummaryList" class="fund-summary-list"></div>
+                            <div id="fundHistoryList" class="fund-history-list"></div>
+                        </div>
+                    </div>
+                    <div class="fund-card hidden" id="fundAdminCard">
+                        <h3>⚙️ เพิ่มเงินฝาก/เงินสำรอง (สำหรับแอดมิน)</h3>
+                        <label>
+                            จำนวนเงิน
+                            <input id="fundAdminAmountInput" type="number" min="0" step="100" placeholder="กรอกจำนวนเงิน">
+                        </label>
+                        <label>
+                            หมายเหตุ
+                            <input id="fundAdminNoteInput" type="text" placeholder="ระบุหมายเหตุ">
+                        </label>
+                        <div class="fund-actions">
+                            <button id="btnFundAddDeposit" class="btn btn-success" type="button">➕ เพิ่มเงินฝาก</button>
+                            <button id="btnFundAddReserve" class="btn btn-warning" type="button">➕ เพิ่มเงินสำรอง</button>
+                        </div>
+                        <p class="help-text">เฉพาะแอดมินหรือ ผอ. เท่านั้นที่ทำรายการนี้ได้</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel panel-stock hidden" id="stockSection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">สต็อกอุปกรณ์</p>
+                        <h2>เพิ่มและตรวจสอบสต็อกอุปกรณ์</h2>
+                    </div>
+                    <span id="stockSummaryPill" class="date-pill">ทั้งหมด 0 รายการ</span>
+                </div>
+                <div class="stock-layout">
+                    <div class="fund-card hidden" id="stockAddFormWrap">
+                        <h3>➕ เพิ่มสต็อกอุปกรณ์</h3>
+                        <label>
+                            ชื่ออุปกรณ์
+                            <input id="stockNameInput" type="text" placeholder="เช่น ถุงมือยาง, ชุด PPE, เวชภัณฑ์">
+                        </label>
+                        <label>
+                            จำนวนคงเหลือ (ชิ้น)
+                            <input id="stockQtyInput" type="number" min="0" step="1" placeholder="กรอกจำนวนที่มีอยู่">
+                        </label>
+                        <label>
+                            จำนวนขั้นต่ำที่ต้องมี (ชิ้น)
+                            <input id="stockMinInput" type="number" min="0" step="1" placeholder="ใช้คำนวณจำนวนที่ขาด">
+                        </label>
+                        <label>
+                            แหล่งที่มา / ผู้จัดหา
+                            <input id="stockSourceInput" type="text" placeholder="เช่น จัดซื้อจากบริษัท X, ได้รับบริจาค">
+                        </label>
+                        <div class="fund-actions">
+                            <button id="btnAddStock" class="btn btn-success" type="button">📦 เพิ่มสต็อก</button>
+                        </div>
+                        <p class="help-text">ผู้เพิ่มรายการ: <strong id="stockAddedByLabel">-</strong></p>
+                    </div>
+                    <div class="fund-card stock-overview-card">
+                        <h3>ภาพรวมสถานะสต็อก</h3>
+                        <div class="stock-stats">
+                            <div class="stock-stat">
+                                <span>รายการทั้งหมด</span>
+                                <strong id="stockStatTotal">0</strong>
+                            </div>
+                            <div class="stock-stat stock-stat-warn">
+                                <span>ใกล้หมด</span>
+                                <strong id="stockStatLow">0</strong>
+                            </div>
+                            <div class="stock-stat stock-stat-out">
+                                <span>ขาดสต็อก</span>
+                                <strong id="stockStatOut">0</strong>
+                            </div>
+                            <div class="stock-stat stock-stat-miss">
+                                <span>จำนวนที่ขาดรวม</span>
+                                <strong id="stockStatMissing">0 ชิ้น</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stock-list-wrap">
+                    <h3 class="stock-list-title">รายการสต็อกทั้งหมด</h3>
+                    <div id="stockList" class="stock-list"></div>
+                </div>
+            </section>
+
+            <section class="panel panel-history hidden" id="stockHistorySection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">เฉพาะแอดมิน / ผอ.</p>
+                        <h2>ประวัติการเบิกอุปกรณ์</h2>
+                    </div>
+                    <span id="stockHistorySummary" class="date-pill">ทั้งหมด 0 รายการ</span>
+                </div>
+                <div id="stockHistoryList" class="fund-history-list"></div>
+            </section>
+
+            <section class="panel panel-status hidden" id="adminSection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">ตรวจสอบทีม</p>
+                        <h2>สถานะเข้าเวรรายบุคคล</h2>
+                    </div>
+                    <div class="status-tabs">
+                        <button class="tab-btn active" data-mode="status">สถานะ</button>
+                        <button class="tab-btn" data-mode="forceout">ออกเวรบังคับ</button>
+                    </div>
+                </div>
+                <div id="statusPanel" class="status-panel"></div>
+                <div id="forceOutPanel" class="forceout-panel hidden"></div>
+            </section>
+
+            <section class="panel panel-vehicle hidden" id="vehicleSection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">ทะเบียนรถ</p>
+                        <h2>รถของฉัน</h2>
+                    </div>
+                    <span id="vehicleSummaryPill" class="date-pill">ทั้งหมด 0 คัน</span>
+                </div>
+                <div class="stock-layout">
+                    <div class="fund-card">
+                        <h3>➕ เพิ่มทะเบียนรถ</h3>
+                        <label>
+                            เลขทะเบียน
+                            <input id="vehiclePlateInput" type="text" placeholder="เช่น กข-1234, asd-2251">
+                        </label>
+                        <label>
+                            รุ่น / ชื่อรถ
+                            <input id="vehicleModelInput" type="text" placeholder="เช่น Toyota Vios, Honda Click">
+                        </label>
+                        <div class="fund-actions">
+                            <button id="btnAddVehicle" class="btn btn-success" type="button">🚗 เพิ่มรถ</button>
+                        </div>
+                        <p class="help-text">เพิ่มในนามผู้ใช้งาน: <strong id="vehicleOwnerLabel">-</strong></p>
+                    </div>
+                    <div class="fund-card stock-overview-card">
+                        <h3>รถของฉันทั้งหมด</h3>
+                        <div id="vehicleMyList" class="stock-list"></div>
+                    </div>
+                </div>
+                <div class="stock-list-wrap hidden" id="vehicleAdminWrap">
+                    <h3 class="stock-list-title">🔍 ทะเบียนรถบุคลากร (แอดมิน/ผอ.)</h3>
+                    <div class="history-filter" style="margin-bottom:12px;">
+                        <label for="vehicleOwnerFilter">เลือกดูรถของ</label>
+                        <select id="vehicleOwnerFilter">
+                            <option value="__all__">ทั้งหมด</option>
+                        </select>
+                    </div>
+                    <div id="vehicleAllList" class="stock-list"></div>
+                </div>
+            </section>
+
+            <section class="panel panel-doctors hidden" id="doctorsSection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">รายชื่อแพทย์</p>
+                        <h2>รายชื่อจากระบบ</h2>
+                    </div>
+                    <span id="doctorsSummaryPill" class="date-pill">ทั้งหมด 0 คน</span>
+                </div>
+                <div class="stock-layout">
+                    <div class="fund-card stock-overview-card" style="grid-column:1/-1;">
+                        <h3>สมาชิกทั้งหมดในระบบ</h3>
+                        <p class="help-text" style="margin-bottom:12px;">จัดกลุ่มตามตำแหน่งและปลอกแขนแบบหน้าเว็บ MEDIC LIGHT CITY (แอดมิน → ผอ. → รองผอ. → ส่วนกลาง → ชำนาญการ → แพทย์ → นักเรียน) พร้อมสถานะเข้าเวร</p>
+                        <div id="doctorsList" class="stock-list"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel panel-history hidden" id="historySection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">บันทึกของคุณ</p>
+                        <h2>ประวัติการเข้า-ออกเวร</h2>
+                    </div>
+                    <span id="currentDate" class="date-pill"></span>
+                </div>
+                <div id="logList" class="log-list"></div>
+            </section>
+        
+            <section class="panel panel-status hidden" id="securitySection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">ความปลอดภัย</p>
+                        <h2>อุปกรณ์ / IP / รายการบล็อก</h2>
+                    </div>
+                </div>
+                <div class="fund-card">
+                    <h3>บล็อก IP หรือชื่อผู้ใช้</h3>
+                    <label>IP Address<input id="banIpInput" type="text" placeholder="เช่น 1.2.3.4"></label>
+                    <label>Username (ถ้ามี)<input id="banUsernameInput" type="text" placeholder="ชื่อผู้ใช้"></label>
+                    <label>เหตุผล<input id="banReasonInput" type="text" placeholder="ละเมิดกฎ / ใช้ DevTools ฯลฯ"></label>
+                    <div class="fund-actions">
+                        <button id="btnCreateBan" class="btn btn-danger" type="button">บล็อกทันที</button>
+                    </div>
+                    <p class="help-text">เมื่อถูกบล็อก ระบบจะดีดออกจากเว็บทันทีเมื่อเข้าใช้งาน</p>
+                </div>
+                <div class="stock-list-wrap" style="margin-top:16px;">
+                    <h3 class="stock-list-title">รายการบล็อกที่ใช้งานอยู่</h3>
+                    <div id="banList" class="stock-list"></div>
+                </div>
+                <div class="stock-list-wrap" style="margin-top:16px;">
+                    <h3 class="stock-list-title">เซสชันอุปกรณ์ล่าสุด</h3>
+                    <div id="deviceSessionList" class="stock-list"></div>
+                </div>
+            </section>
+
+        
+            <section class="panel panel-status hidden" id="membersSection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">จัดการสมาชิก</p>
+                        <h2>ปรับ Role / สิทธิ์ด้วยมือ</h2>
+                    </div>
+                </div>
+                <p class="help-text" style="margin-bottom:12px;">ผู้สมัครใหม่จะได้ role พื้นฐาน — แอดมินเปลี่ยนตำแหน่งและสิทธิ์ได้ที่นี่</p>
+                <div id="membersList" class="stock-list"></div>
+            </section>
+
+            <!-- เมนูลับ: ถอดตำแหน่งจาก IP (เฉพาะแอดมิน + กด Numpad1 x3) -->
+            <section class="panel panel-status hidden" id="intelSection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">เมนูลับ · คีย์ลัด Num1 × 3</p>
+                        <h2>Intel — ถอดตำแหน่งจาก IP</h2>
+                    </div>
+                    <button id="btnRefreshIntel" class="btn btn-secondary btn-small" type="button">รีเฟรชรายการ</button>
+                </div>
+                <p class="help-text" style="margin-bottom:12px;">
+                    เลือก IP ของสมาชิกจากรายการ หรือพิมพ์ IP เอง แล้วให้ระบบคำนวณตำแหน่งจากหลายแหล่ง (ละเอียดระดับเมือง/ย่าน)
+                </p>
+
+                <div class="fund-card" style="margin-bottom:16px;">
+                    <h3>เลือก IP เพื่อถอดตำแหน่ง</h3>
+                    <label>IP จากเซสชันสมาชิก
+                        <select id="intelIpSelect">
+                            <option value="">— เลือกรายชื่อ / IP —</option>
+                        </select>
+                    </label>
+                    <label>หรือพิมพ์ IP เอง
+                        <input id="intelIpInput" type="text" placeholder="เช่น 1.2.3.4" autocomplete="off">
+                    </label>
+                    <div class="fund-actions">
+                        <button id="btnIntelLookup" class="btn btn-primary" type="button">คำนวณตำแหน่ง</button>
+                    </div>
+                    <div id="intelLookupResult" class="stock-list" style="margin-top:12px;"></div>
+                </div>
+
+                <div id="intelSummary" class="date-pill" style="margin-bottom:12px;">—</div>
+                <h3 class="stock-list-title">เซสชันล่าสุด + ตำแหน่งคร่าวๆ</h3>
+                <div id="intelList" class="stock-list"></div>
+            </section>
+
+        </main>
+    </div>
+
+
+    <!-- Local Music Player — เลือกไฟล์/โฟลเดอร์เพลงจากเครื่อง -->
+    <div class="music-playlist-panel" id="musicPlaylistPanel" hidden>
+        <div class="music-playlist-head">
+            <strong><i class="bi bi-music-note-list"></i> รายการเพลง</strong>
+            <button type="button" class="music-help-close" id="musicPlaylistClose" aria-label="ปิด">&times;</button>
+        </div>
+        <ul class="music-playlist" id="musicPlaylist"></ul>
+        <p class="music-playlist-empty" id="musicPlaylistEmpty">ยังไม่มีเพลง — กดปุ่มโฟลเดอร์หรือไฟล์ด้านล่าง</p>
+    </div>
+
+    <div class="music-player" id="musicPlayer">
+        <div class="music-player-drag" id="musicDragHandle" title="ลากย้ายตำแหน่ง">
+            <i class="bi bi-grip-horizontal"></i>
+        </div>
+        <div class="music-player-inner music-player-local">
+            <div class="music-meta">
+                <div class="music-art" id="musicArt">
+                    <i class="bi bi-music-note-beamed"></i>
+                </div>
+                <div class="music-info">
+                    <strong id="musicTitle">ยังไม่มีเพลง</strong>
+                    <span id="musicSubtitle">เลือกไฟล์หรือโฟลเดอร์เพลงจากเครื่อง</span>
+                </div>
+            </div>
+
+            <div class="music-controls">
+                <button type="button" class="music-btn" id="musicPrev" title="เพลงก่อนหน้า" disabled>
+                    <i class="bi bi-skip-start-fill"></i>
+                </button>
+                <button type="button" class="music-btn music-btn-play" id="musicPlay" title="เล่น / หยุด" disabled>
+                    <i class="bi bi-play-fill" id="musicPlayIcon"></i>
+                </button>
+                <button type="button" class="music-btn" id="musicNext" title="เพลงถัดไป" disabled>
+                    <i class="bi bi-skip-end-fill"></i>
+                </button>
+            </div>
+
+            <div class="music-progress-wrap">
+                <span class="music-time" id="musicCurrent">0:00</span>
+                <input type="range" class="music-seek" id="musicSeek" min="0" max="100" value="0" disabled>
+                <span class="music-time" id="musicDuration">0:00</span>
+            </div>
+
+            <div class="music-local-wrap">
+                <button type="button" class="music-btn music-btn-load" id="musicPickFiles" title="เลือกไฟล์เพลง">
+                    <i class="bi bi-file-earmark-music"></i>
+                </button>
+                <button type="button" class="music-btn music-btn-load" id="musicPickFolder" title="เลือกโฟลเดอร์เพลง">
+                    <i class="bi bi-folder2-open"></i>
+                </button>
+                <button type="button" class="music-btn" id="musicPlaylistBtn" title="รายการเพลง">
+                    <i class="bi bi-list-ul"></i>
+                </button>
+                <button type="button" class="music-btn" id="musicShuffleBtn" title="เล่นตามลำดับ" data-mode="order">
+                    <i class="bi bi-arrow-right"></i>
+                </button>
+                <button type="button" class="music-btn" id="musicVolumeBtn" title="เสียง">
+                    <i class="bi bi-volume-up-fill" id="musicVolIcon"></i>
+                </button>
+                <input type="range" class="music-volume" id="musicVolume" min="0" max="1" step="0.05" value="0.8">
+                <button type="button" class="music-btn music-btn-collapse" id="musicCollapseBtn" title="หดย่อ">
+                    <i class="bi bi-chevron-down" id="musicCollapseIcon"></i>
+                </button>
+                <!-- hidden file inputs -->
+                <input type="file" id="musicFileInput" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac" multiple hidden>
+                <input type="file" id="musicFolderInput" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac" multiple webkitdirectory directory hidden>
+            </div>
+        </div>
+        <audio id="musicAudio" preload="metadata"></audio>
+    </div>
+
+    <script src="js/anti-devtools.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

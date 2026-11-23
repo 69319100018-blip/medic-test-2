@@ -1,0 +1,4 @@
+DATABASE_URL=postgresql://neondb_owner:npg_IVbBaXrE43nc@ep-gentle-dust-bbuefr44-pooler.c-15.us-east-1.aws.neon.tech/neondb?sslmode=require
+JWT_SECRET=medic-shift-jwt-secret-change-this-in-production-9f3a2b8c7d6e5f4a
+PORT=3000
+ALLOWED_ORIGINS=http://localhost:3000
