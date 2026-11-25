@@ -2524,3 +2524,647 @@ body.dashboard-body::after {
     scale: 1 !important;
   }
 }
+
+/* ==========================================================================
+   RESPONSIVE PRODUCT DESIGN — MINI → MOBILE → FOLDABLE → DESKTOP
+   Breakpoints are CSS viewport widths, not diagonal display inches.
+   ========================================================================== */
+
+:root {
+  --page-gutter: clamp(12px, 2.2vw, 28px);
+  --control-hit: 44px;
+  --surface-radius: clamp(12px, 1.5vw, 20px);
+}
+
+html {
+  min-width: 280px;
+  scroll-padding-top: 84px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-width: 280px;
+}
+
+.page-dashboard,
+.page-dashboard *,
+.login-body .login-page,
+.login-body .login-page * {
+  box-sizing: border-box;
+}
+
+.page-dashboard .dashboard-grid {
+  container-name: dashboard-workspace;
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.page-dashboard .panel,
+.page-dashboard .panel > *,
+.page-dashboard .fund-layout > *,
+.page-dashboard .stock-layout > *,
+.page-dashboard .fund-right-col > * {
+  min-width: 0;
+}
+
+.page-dashboard .panel,
+.page-dashboard .fund-card,
+.page-dashboard .stock-item,
+.page-dashboard .member-card,
+.page-dashboard .status-card,
+.page-dashboard .forceout-card {
+  border-radius: var(--surface-radius);
+}
+
+.page-dashboard .panel-header h2,
+.page-dashboard .stock-list-title,
+.page-dashboard .fund-card h3 {
+  overflow-wrap: anywhere;
+}
+
+.page-dashboard .btn,
+.page-dashboard .nav-link,
+.page-dashboard .music-btn,
+.page-dashboard button,
+.login-body button {
+  touch-action: manipulation;
+}
+
+/* Wider workspace inside Fold / landscape tablet / tri-fold */
+@container dashboard-workspace (min-width: 680px) {
+  .page-dashboard .panel-profile {
+    grid-template-columns: minmax(0, 1.15fr) minmax(230px, .85fr);
+    grid-template-areas:
+      "identity status"
+      "actions tools";
+    align-items: center;
+  }
+
+  .page-dashboard .fund-layout {
+    grid-template-columns: minmax(0, 1.05fr) minmax(280px, .95fr);
+  }
+
+  .page-dashboard .stock-layout {
+    grid-template-columns: minmax(260px, .9fr) minmax(0, 1.1fr);
+  }
+
+  .page-dashboard .stock-stats,
+  .page-dashboard .status-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-dashboard .fund-cumulative {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Mid-size phone and narrow Fold cover / unfolded portrait */
+@media (max-width: 860px) {
+  .page-dashboard {
+    padding-top: max(10px, env(safe-area-inset-top)) !important;
+    padding-right: max(12px, env(safe-area-inset-right)) !important;
+    padding-bottom: calc(104px + env(safe-area-inset-bottom)) !important;
+    padding-left: max(12px, env(safe-area-inset-left)) !important;
+  }
+
+  .page-dashboard > .topbar {
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .page-dashboard > .dashboard-nav {
+    top: max(0px, env(safe-area-inset-top));
+    z-index: 80;
+    min-width: 0;
+    padding: 7px;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    box-shadow: 0 8px 22px rgba(12, 34, 55, .13);
+  }
+
+  .page-dashboard > .dashboard-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .page-dashboard .nav-link {
+    min-height: var(--control-hit);
+    padding: 9px 12px;
+    scroll-snap-align: start;
+  }
+
+  .page-dashboard .dashboard-grid {
+    min-width: 0;
+  }
+
+  .page-dashboard .panel {
+    padding: clamp(16px, 3vw, 22px);
+  }
+
+  .page-dashboard .panel-header {
+    flex-wrap: wrap;
+  }
+
+  .page-dashboard .action-grid .btn {
+    min-height: 50px;
+  }
+
+  .page-dashboard input:not([type="checkbox"]):not([type="radio"]),
+  .page-dashboard select,
+  .page-dashboard textarea {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .page-dashboard .btn,
+  .page-dashboard .music-btn {
+    min-height: var(--control-hit);
+  }
+
+  .page-dashboard .history-filter {
+    flex-wrap: wrap;
+  }
+
+  .page-dashboard .history-filter > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .page-dashboard .music-player {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    max-width: calc(100vw - 16px);
+  }
+
+  .page-dashboard .music-playlist-panel {
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    max-height: min(52svh, 420px);
+  }
+}
+
+/* Standard phones: 360–600 CSS px */
+@media (max-width: 600px) {
+  .login-body .login-page {
+    min-height: 100svh;
+    padding-top: max(14px, env(safe-area-inset-top));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: calc(58px + env(safe-area-inset-bottom));
+    padding-left: max(12px, env(safe-area-inset-left));
+  }
+
+  .login-body .login-inner {
+    width: min(100%, 440px);
+  }
+
+  .login-body .login-card {
+    width: 100%;
+  }
+
+  .login-body .input-wrap .form-control {
+    min-height: 50px;
+    font-size: 16px;
+  }
+
+  .page-dashboard > .topbar {
+    flex-wrap: nowrap;
+  }
+
+  .page-dashboard .brand {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .page-dashboard .brand-text {
+    min-width: 0;
+  }
+
+  .page-dashboard .brand-text strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page-dashboard .topbar-actions {
+    flex: 0 0 auto;
+  }
+
+  .page-dashboard .btn-logout {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-hit);
+    min-width: var(--control-hit);
+    height: var(--control-hit);
+    min-height: var(--control-hit);
+    padding: 0;
+  }
+
+  .page-dashboard .btn-logout i {
+    margin: 0;
+  }
+
+  .page-dashboard .nav-link {
+    min-height: var(--control-hit);
+    padding: 9px 11px;
+    font-size: .78rem;
+  }
+
+  .page-dashboard .nav-link i {
+    width: 18px;
+    flex-basis: 18px;
+    font-size: .98rem;
+  }
+
+  .page-dashboard .panel {
+    padding: 16px;
+  }
+
+  .page-dashboard .panel-header {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .page-dashboard .panel-header > div:first-child {
+    flex: 1 1 100%;
+  }
+
+  .page-dashboard .date-pill,
+  .page-dashboard .history-highlight {
+    white-space: normal;
+    max-width: 100%;
+  }
+
+  .page-dashboard .profile-header {
+    align-items: center;
+  }
+
+  .page-dashboard .action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-dashboard .action-grid .btn {
+    min-height: 52px;
+    padding: 9px 8px;
+    white-space: normal;
+  }
+
+  .page-dashboard .quick-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-dashboard .quick-links .btn {
+    min-height: var(--control-hit);
+    white-space: normal;
+  }
+
+  .page-dashboard .stock-stats,
+  .page-dashboard .status-panel,
+  .page-dashboard #membersList,
+  .page-dashboard #banList,
+  .page-dashboard #deviceSessionList,
+  .page-dashboard #vehicleMyList,
+  .page-dashboard #vehicleAllList,
+  .page-dashboard #doctorsList,
+  .page-dashboard .stock-list {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .page-dashboard .fund-cumulative {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-dashboard .fund-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .page-dashboard .fund-actions .btn {
+    min-width: 0;
+    min-height: var(--control-hit);
+    padding: 9px 7px;
+    white-space: normal;
+  }
+
+  .page-dashboard .stock-item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .page-dashboard .stock-item-actions .btn {
+    flex: 1 1 120px;
+    min-height: var(--control-hit);
+  }
+
+  .page-dashboard .fund-history-item {
+    gap: 8px;
+  }
+
+  .page-dashboard .fund-history-meta {
+    align-items: flex-start;
+  }
+
+  .page-dashboard .music-player {
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
+}
+
+/* Ultra-compact phones: 280–359 CSS px, one-thumb first */
+@media (max-width: 359px) {
+  :root {
+    --page-gutter: 10px;
+  }
+
+  .login-body .login-page {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .login-body .login-inner {
+    gap: 12px;
+  }
+
+  .login-body .login-brand {
+    padding: 17px;
+    border-radius: 14px;
+  }
+
+  .login-body .brand-logo-wrap {
+    gap: 9px;
+    margin-bottom: 14px;
+  }
+
+  .login-body .brand-mark {
+    width: 42px;
+    height: 42px;
+  }
+
+  .login-body .login-brand h1 {
+    font-size: clamp(1.65rem, 8vw, 1.9rem);
+  }
+
+  .login-body .login-brand .desc {
+    font-size: .8rem;
+  }
+
+  .login-body .feature-chips {
+    gap: 5px;
+    margin-top: 12px;
+  }
+
+  .login-body .feature-chips span {
+    padding: 6px 7px;
+    font-size: .68rem;
+  }
+
+  .login-body .login-card {
+    padding: 18px 15px !important;
+    border-radius: 14px;
+  }
+
+  .login-body .card-header-row {
+    align-items: center;
+    gap: 8px;
+  }
+
+  .login-body .card-header-row h2 {
+    font-size: 1.08rem;
+  }
+
+  .login-body .secure-badge {
+    padding: 6px 7px;
+    font-size: .62rem;
+  }
+
+  .page-dashboard {
+    gap: 8px;
+    padding-right: 8px !important;
+    padding-left: 8px !important;
+  }
+
+  .page-dashboard > .topbar {
+    gap: 6px;
+    min-height: 54px;
+    padding: 7px 8px !important;
+  }
+
+  .page-dashboard .brand {
+    gap: 6px;
+  }
+
+  .page-dashboard .brand-logo {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+
+  .page-dashboard .brand-text strong {
+    max-width: 104px;
+    font-size: .75rem;
+  }
+
+  .page-dashboard .brand-text small,
+  .page-dashboard .time-label span {
+    display: none;
+  }
+
+  .page-dashboard .time-label {
+    min-width: 0;
+    padding: 4px 5px;
+    border: 0;
+    background: transparent;
+  }
+
+  .page-dashboard .time-label strong {
+    font-size: .72rem;
+  }
+
+  .page-dashboard .btn-logout {
+    width: var(--control-hit);
+    min-width: var(--control-hit);
+    height: var(--control-hit);
+    min-height: var(--control-hit);
+  }
+
+  .page-dashboard > .dashboard-nav {
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .page-dashboard .nav-link {
+    display: inline-flex;
+    justify-content: center;
+    width: var(--control-hit);
+    min-width: var(--control-hit);
+    min-height: var(--control-hit);
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    scroll-snap-align: center;
+  }
+
+  .page-dashboard .nav-link i {
+    width: auto;
+    flex: 0 0 auto;
+    font-size: 1.05rem;
+  }
+
+  .page-dashboard .panel {
+    padding: 13px;
+    border-radius: 12px;
+  }
+
+  .page-dashboard .panel-header {
+    gap: 8px;
+    margin-bottom: 13px;
+    padding-bottom: 11px;
+  }
+
+  .page-dashboard .panel-header h2 {
+    font-size: 1rem;
+  }
+
+  .page-dashboard .profile-header {
+    gap: 9px;
+  }
+
+  .page-dashboard .avatar {
+    width: 50px;
+    height: 50px;
+    flex-basis: 50px;
+    border-radius: 12px;
+  }
+
+  .page-dashboard .profile-header h2 {
+    font-size: .98rem;
+  }
+
+  .page-dashboard .profile-header .subtext {
+    font-size: .76rem;
+  }
+
+  .page-dashboard .action-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page-dashboard .fund-cumulative,
+  .page-dashboard .fund-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page-dashboard .stock-stat {
+    min-height: 72px;
+  }
+
+  .page-dashboard .panel-header .date-pill {
+    align-self: flex-start;
+    font-size: .68rem;
+  }
+
+  .page-dashboard .music-player-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px;
+  }
+
+  .page-dashboard .music-progress-wrap {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .page-dashboard .music-local-wrap {
+    grid-column: 1 / -1;
+    order: 4;
+    justify-content: flex-start;
+    gap: 5px;
+  }
+
+  .page-dashboard .music-volume {
+    max-width: 64px;
+  }
+}
+
+/* Tablet / Fold landscape: let the wider inner screen do more */
+@media (min-width: 601px) and (max-width: 1024px) {
+  .page-dashboard .panel {
+    padding: clamp(17px, 2.5vw, 24px);
+  }
+
+  .page-dashboard .fund-card {
+    padding: clamp(14px, 2vw, 19px);
+  }
+
+  .page-dashboard .stock-item,
+  .page-dashboard .member-card,
+  .page-dashboard .status-card,
+  .page-dashboard .forceout-card {
+    padding: 13px;
+  }
+}
+
+/* Landscape phones: avoid vertical centering into a short viewport */
+@media (orientation: landscape) and (max-height: 520px) {
+  .login-body .login-page {
+    align-items: flex-start;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: 18px;
+  }
+
+  .login-body .login-brand {
+    min-height: 0;
+  }
+
+  .login-body .login-card {
+    align-self: stretch;
+  }
+
+  .login-body .page-footer {
+    position: static;
+    margin-top: 12px;
+  }
+
+  .page-dashboard {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .page-dashboard > .dashboard-nav {
+    scroll-snap-type: x proximity;
+  }
+}
+
+/* Keep wide tables usable without forcing the whole page to scroll */
+.page-dashboard .table-responsive,
+.page-dashboard .table-wrap,
+.page-dashboard .history-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page-dashboard table {
+  max-width: 100%;
+}
+
+.page-dashboard th,
+.page-dashboard td {
+  overflow-wrap: anywhere;
+}
+
+/* Very wide Fold / tri-fold / tablet canvas */
+@media (min-width: 1121px) {
+  .page-dashboard {
+    width: min(100%, 1760px);
+    max-width: 1760px !important;
+  }
+}
+
+/* Respect notches and home indicators on modern devices */
+@supports (padding: max(0px)) {
+  .page-dashboard {
+    padding-left: max(var(--page-gutter), env(safe-area-inset-left)) !important;
+    padding-right: max(var(--page-gutter), env(safe-area-inset-right)) !important;
+  }
+}
