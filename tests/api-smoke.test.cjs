@@ -116,3 +116,31 @@ test('stock item IDs accept numeric database IDs and status changes persist thro
   assert.ok(appSource.includes('await apiUpdateStock(id, { manualStatus: newStatus });'));
   assert.ok(appSource.includes('await apiLoadStockWithdrawals()'));
 });
+
+
+test('calendar write permissions include deputy director and higher roles only', () => {
+  const { canManageCalendar } = require('../api/calendar-permissions');
+  assert.equal(canManageCalendar({ role: 'รองผู้อำนวยการแพทย์' }), true);
+  assert.equal(canManageCalendar({ role: 'ผู้อำนวยการแพทย์' }), true);
+  assert.equal(canManageCalendar({ role: 'แอดมินแพทย์' }), true);
+  assert.equal(canManageCalendar({ role: 'นักเรียนแพทย์' }), false);
+  assert.equal(canManageCalendar({ role: 'แพทย์' }), false);
+  assert.equal(canManageCalendar({ role: 'นักเรียนแพทย์', isAdmin: true }), true);
+});
+
+test('calendar API requires authentication and guards all write routes', async () => {
+  const read = await fetch(`${apiUrl}/api/calendar-events?from=2026-11-01&to=2026-11-30`);
+  const create = await fetch(`${apiUrl}/api/calendar-events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date: '2026-11-25', title: 'ประชุมทีม' })
+  });
+  assert.equal(read.status, 401);
+  assert.equal(create.status, 401);
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  assert.match(source, /app\.post\('\/api\/calendar-events', authRequired, calendarManagerRequired/);
+  assert.match(source, /app\.patch\('\/api\/calendar-event', authRequired, calendarManagerRequired/);
+  assert.match(source, /app\.delete\('\/api\/calendar-event', authRequired, calendarManagerRequired/);
+});

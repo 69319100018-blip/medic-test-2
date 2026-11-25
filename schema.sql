@@ -113,6 +113,26 @@ CREATE TABLE IF NOT EXISTS doctors (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ปฏิทินกิจกรรมร่วมกัน (ทุกคนดูได้; API จำกัดการจัดการไว้ที่รองผอ.ขึ้นไป)
+CREATE TABLE IF NOT EXISTS calendar_events (
+    id              BIGSERIAL PRIMARY KEY,
+    event_date      DATE NOT NULL,
+    title           VARCHAR(160) NOT NULL,
+    description     TEXT,
+    start_time      TIME,
+    end_time        TIME,
+    location        VARCHAR(180),
+    created_by      TEXT REFERENCES users(username) ON DELETE SET NULL,
+    updated_by      TEXT REFERENCES users(username) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT calendar_events_time_range_check
+        CHECK (start_time IS NULL OR end_time IS NULL OR end_time >= start_time)
+);
+
+CREATE INDEX IF NOT EXISTS idx_calendar_events_date_time
+    ON calendar_events (event_date, start_time, id);
+
 -- ข้อมูลเริ่มต้น
 INSERT INTO central_fund (id, balance, cash, deposit, reserve)
 VALUES (1, 70000, 40000, 20000, 10000)

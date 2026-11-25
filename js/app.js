@@ -1788,6 +1788,7 @@ async function initDashboard() {
     renderStock();
     renderVehicles();
     renderDoctors();
+    initCalendarFeature();
     updateActionButtons();
     if (!canViewMonitoring(currentUser)) {
         document.getElementById('adminSection')?.classList.add('hidden');
@@ -1850,6 +1851,350 @@ function handleLogin(e) {
         .finally(() => { if (btn) btn.disabled = false; });
 }
 
+
+
+/* ==========================================================================
+   SHARED CALENDAR — events visible to all signed-in users.
+   Deputy directors, directors and admins can create, edit and delete events.
+   ========================================================================== */
+const calendarUiState = {
+    month: null,
+    selectedDate: '',
+    events: [],
+    canManage: false,
+    editingId: null,
+    returnFocus: null
+};
+
+function calendarIsoDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function calendarDateFromIso(value) {
+    const [year, month, day] = String(value || '').split('-').map(Number);
+    return new Date(year, month - 1, day);
+}
+
+function calendarThaiDate(value, options = {}) {
+    return new Intl.DateTimeFormat('th-TH', {
+        weekday: options.weekday || undefined,
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+    }).format(calendarDateFromIso(value));
+}
+
+function calendarCanManage(username) {
+    const profile = userProfiles[username];
+    const role = String(profile?.role || '').toLowerCase().replace(/\s+/g, '');
+    return profile?.isAdmin === true || role.includes('แอดมิน') || role.includes('ผู้อำนวยการ');
+}
+
+function calendarEventTime(event) {
+    if (!event.startTime) return 'ตลอดวัน';
+    return event.endTime ? `${event.startTime} – ${event.endTime}` : `เริ่ม ${event.startTime}`;
+}
+
+function renderCalendarMonth() {
+    const monthTitle = document.getElementById('calendarMonthTitle');
+    const grid = document.getElementById('calendarGrid');
+    if (!monthTitle || !grid || !calendarUiState.month) return;
+
+    const year = calendarUiState.month.getFullYear();
+    const month = calendarUiState.month.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    monthTitle.textContent = new Intl.DateTimeFormat('th-TH', {
+        month: 'long',
+        year: 'numeric'
+    }).format(new Date(year, month, 1));
+
+    const today = calendarIsoDate(new Date());
+    const cells = [];
+    for (let i = 0; i < firstDay; i++) {
+        cells.push('<span class="calendar-day-spacer" aria-hidden="true"></span>');
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+        const date = calendarIsoDate(new Date(year, month, day));
+        const count = calendarUiState.events.filter((event) => event.date === date).length;
+        const selected = date === calendarUiState.selectedDate;
+        const isToday = date === today;
+        cells.push(`
+            <button type="button"
+                class="calendar-day${selected ? ' selected' : ''}${isToday ? ' today' : ''}${count ? ' has-events' : ''}"
+                data-calendar-date="${date}"
+                aria-pressed="${selected ? 'true' : 'false'}"
+                aria-label="${calendarThaiDate(date)} มี ${count} กิจกรรม">
+                <span class="calendar-day-number">${day}</span>
+                ${count ? `<span class="calendar-day-count">${count > 9 ? '9+' : count}</span>` : '<span class="calendar-day-dot" aria-hidden="true"></span>'}
+            </button>
+        `);
+    }
+    const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+    while (cells.length < totalCells) cells.push('<span class="calendar-day-spacer" aria-hidden="true"></span>');
+    grid.innerHTML = cells.join('');
+    renderCalendarDayDetails();
+}
+
+function renderCalendarDayDetails() {
+    const dateLabel = document.getElementById('calendarSelectedDate');
+    const eventsList = document.getElementById('calendarEventsList');
+    const addButton = document.getElementById('btnCalendarAdd');
+    const permissionNote = document.getElementById('calendarPermissionNote');
+    if (!eventsList || !calendarUiState.selectedDate) return;
+
+    if (dateLabel) dateLabel.textContent = calendarThaiDate(calendarUiState.selectedDate, { weekday: 'long' });
+    if (addButton) addButton.classList.toggle('hidden', !calendarUiState.canManage);
+    if (permissionNote) {
+        permissionNote.textContent = calendarUiState.canManage
+            ? 'คุณสามารถสร้าง แก้ไข และลบกิจกรรมในปฏิทินได้'
+            : 'คุณสามารถดูตารางกิจกรรมได้ การสร้างหรือแก้ไขกำหนดให้รองผู้อำนวยการขึ้นไป';
+    }
+
+    const events = calendarUiState.events.filter((event) => event.date === calendarUiState.selectedDate);
+    if (!events.length) {
+        eventsList.innerHTML = '<div class="calendar-empty-state"><i class="bi bi-calendar2-check"></i><strong>ยังไม่มีกิจกรรมในวันนี้</strong><span>เลือกวันอื่นเพื่อดูตาราง หรือรอผู้ดูแลเพิ่มกิจกรรม</span></div>';
+        return;
+    }
+
+    eventsList.innerHTML = events.map((event) => {
+        const description = event.description
+            ? `<p class="calendar-event-description">${escapeHtml(event.description).split('\n').join('<br>')}</p>`
+            : '';
+        const location = event.location
+            ? `<span class="calendar-event-location"><i class="bi bi-geo-alt"></i> ${escapeHtml(event.location)}</span>`
+            : '';
+        const controls = calendarUiState.canManage ? `
+            <div class="calendar-event-actions">
+                <button type="button" class="calendar-mini-btn" data-calendar-edit="${escapeHtml(event.id)}" aria-label="แก้ไข ${escapeHtml(event.title)}"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+                <button type="button" class="calendar-mini-btn danger" data-calendar-delete="${escapeHtml(event.id)}" aria-label="ลบ ${escapeHtml(event.title)}"><i class="bi bi-trash3"></i> ลบ</button>
+            </div>` : '';
+        return `
+            <article class="calendar-event-card">
+                <div class="calendar-event-card-top">
+                    <span class="calendar-event-time"><i class="bi bi-clock"></i> ${calendarEventTime(event)}</span>
+                    ${controls}
+                </div>
+                <h4>${escapeHtml(event.title)}</h4>
+                ${description}
+                ${location}
+                <span class="calendar-event-author">เพิ่มโดย ${escapeHtml(event.createdByName || 'ไม่ระบุ')}</span>
+            </article>
+        `;
+    }).join('');
+}
+
+async function loadCalendarMonth() {
+    const eventsList = document.getElementById('calendarEventsList');
+    if (!calendarUiState.month) return;
+    const year = calendarUiState.month.getFullYear();
+    const month = calendarUiState.month.getMonth();
+    const from = calendarIsoDate(new Date(year, month, 1));
+    const to = calendarIsoDate(new Date(year, month + 1, 0));
+    if (eventsList) eventsList.innerHTML = '<div class="calendar-loading"><span class="calendar-spinner"></span> กำลังโหลดกิจกรรม...</div>';
+
+    try {
+        calendarUiState.events = await apiLoadCalendarEvents(from, to);
+        if (!Array.isArray(calendarUiState.events)) calendarUiState.events = [];
+        renderCalendarMonth();
+    } catch (err) {
+        calendarUiState.events = [];
+        renderCalendarMonth();
+        if (eventsList) {
+            eventsList.innerHTML = `<div class="calendar-empty-state error"><i class="bi bi-cloud-slash"></i><strong>โหลดกิจกรรมไม่สำเร็จ</strong><span>${escapeHtml(err.message || 'กรุณาลองใหม่อีกครั้ง')}</span><button type="button" class="calendar-mini-btn" id="btnCalendarRetry"><i class="bi bi-arrow-clockwise"></i> ลองอีกครั้ง</button></div>`;
+        }
+    }
+}
+
+function hideCalendarForm() {
+    const form = document.getElementById('calendarEventForm');
+    if (form) form.classList.add('hidden');
+    calendarUiState.editingId = null;
+}
+
+function showCalendarForm(eventToEdit = null) {
+    if (!calendarUiState.canManage) return;
+    const form = document.getElementById('calendarEventForm');
+    if (!form) return;
+    const titleInput = document.getElementById('calendarEventTitle');
+    const descriptionInput = document.getElementById('calendarEventDescription');
+    const dateInput = document.getElementById('calendarEventDate');
+    const startInput = document.getElementById('calendarEventStart');
+    const endInput = document.getElementById('calendarEventEnd');
+    const locationInput = document.getElementById('calendarEventLocation');
+    const formTitle = document.getElementById('calendarFormTitle');
+    const formDate = document.getElementById('calendarFormDate');
+    const saveButton = document.getElementById('btnCalendarSave');
+
+    calendarUiState.editingId = eventToEdit?.id || null;
+    form.reset();
+    if (eventToEdit) {
+        titleInput.value = eventToEdit.title || '';
+        descriptionInput.value = eventToEdit.description || '';
+        dateInput.value = eventToEdit.date || calendarUiState.selectedDate;
+        startInput.value = eventToEdit.startTime || '';
+        endInput.value = eventToEdit.endTime || '';
+        locationInput.value = eventToEdit.location || '';
+    } else {
+        dateInput.value = calendarUiState.selectedDate;
+    }
+    if (formTitle) formTitle.textContent = eventToEdit ? 'แก้ไขกิจกรรม' : 'เพิ่มกิจกรรมใหม่';
+    if (formDate) formDate.textContent = calendarThaiDate(dateInput.value);
+    if (saveButton) saveButton.innerHTML = eventToEdit
+        ? '<i class="bi bi-check2"></i> บันทึกการแก้ไข'
+        : '<i class="bi bi-plus-lg"></i> เพิ่มกิจกรรม';
+    form.classList.remove('hidden');
+    titleInput.focus();
+}
+
+function closeCalendar() {
+    const modal = document.getElementById('calendarModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    hideCalendarForm();
+    if (calendarUiState.returnFocus && typeof calendarUiState.returnFocus.focus === 'function') {
+        calendarUiState.returnFocus.focus();
+    }
+}
+
+async function openCalendar() {
+    const modal = document.getElementById('calendarModal');
+    if (!modal) return;
+    calendarUiState.returnFocus = document.getElementById('btnCalendar');
+    const today = new Date();
+    calendarUiState.month = new Date(today.getFullYear(), today.getMonth(), 1);
+    calendarUiState.selectedDate = calendarIsoDate(today);
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    hideCalendarForm();
+    renderCalendarMonth();
+    await loadCalendarMonth();
+    document.getElementById('btnCalendarClose')?.focus();
+}
+
+async function changeCalendarMonth(offset) {
+    if (!calendarUiState.month) return;
+    calendarUiState.month = new Date(
+        calendarUiState.month.getFullYear(),
+        calendarUiState.month.getMonth() + offset,
+        1
+    );
+    calendarUiState.selectedDate = calendarIsoDate(calendarUiState.month);
+    hideCalendarForm();
+    await loadCalendarMonth();
+}
+
+async function saveCalendarEvent(event) {
+    event.preventDefault();
+    if (!calendarUiState.canManage) return;
+    const form = document.getElementById('calendarEventForm');
+    if (!form?.reportValidity()) return;
+
+    const payload = {
+        date: document.getElementById('calendarEventDate').value,
+        title: document.getElementById('calendarEventTitle').value.trim(),
+        description: document.getElementById('calendarEventDescription').value.trim(),
+        startTime: document.getElementById('calendarEventStart').value,
+        endTime: document.getElementById('calendarEventEnd').value,
+        location: document.getElementById('calendarEventLocation').value.trim()
+    };
+    if (payload.endTime && !payload.startTime) {
+        showAlert('ข้อมูลเวลาไม่ครบ', 'กรุณาระบุเวลาเริ่มก่อนเวลาเสร็จสิ้น', 'warning');
+        return;
+    }
+    const saveButton = document.getElementById('btnCalendarSave');
+    if (saveButton) saveButton.disabled = true;
+    const editing = Boolean(calendarUiState.editingId);
+    try {
+        if (editing) {
+            await apiUpdateCalendarEvent({ ...payload, id: calendarUiState.editingId });
+        } else {
+            await apiCreateCalendarEvent(payload);
+        }
+        const [year, month] = payload.date.split('-').map(Number);
+        calendarUiState.month = new Date(year, month - 1, 1);
+        calendarUiState.selectedDate = payload.date;
+        hideCalendarForm();
+        await loadCalendarMonth();
+        showAlert(editing ? 'แก้ไขกิจกรรมแล้ว' : 'เพิ่มกิจกรรมแล้ว', payload.title, 'success');
+    } catch (err) {
+        showAlert('บันทึกกิจกรรมไม่สำเร็จ', err.message || 'กรุณาลองใหม่อีกครั้ง', 'error');
+    } finally {
+        if (saveButton) saveButton.disabled = false;
+    }
+}
+
+async function deleteCalendarEvent(id) {
+    const event = calendarUiState.events.find((item) => String(item.id) === String(id));
+    if (!event || !calendarUiState.canManage) return;
+    if (!window.confirm(`ยืนยันลบกิจกรรม "${event.title}" หรือไม่?`)) return;
+    try {
+        await apiDeleteCalendarEvent(id);
+        hideCalendarForm();
+        await loadCalendarMonth();
+        showAlert('ลบกิจกรรมแล้ว', event.title, 'success');
+    } catch (err) {
+        showAlert('ลบกิจกรรมไม่สำเร็จ', err.message || 'กรุณาลองใหม่อีกครั้ง', 'error');
+    }
+}
+
+function initCalendarFeature() {
+    const button = document.getElementById('btnCalendar');
+    const modal = document.getElementById('calendarModal');
+    if (!button || !modal || window.__calendarFeatureInitialized) return;
+    window.__calendarFeatureInitialized = true;
+    calendarUiState.canManage = calendarCanManage(currentUser);
+
+    button.addEventListener('click', openCalendar);
+    document.getElementById('btnCalendarClose')?.addEventListener('click', closeCalendar);
+    document.getElementById('btnCalendarPrev')?.addEventListener('click', () => changeCalendarMonth(-1));
+    document.getElementById('btnCalendarNext')?.addEventListener('click', () => changeCalendarMonth(1));
+    document.getElementById('btnCalendarToday')?.addEventListener('click', async () => {
+        const today = new Date();
+        calendarUiState.month = new Date(today.getFullYear(), today.getMonth(), 1);
+        calendarUiState.selectedDate = calendarIsoDate(today);
+        hideCalendarForm();
+        await loadCalendarMonth();
+    });
+    document.getElementById('btnCalendarAdd')?.addEventListener('click', () => showCalendarForm());
+    document.getElementById('btnCalendarCancel')?.addEventListener('click', hideCalendarForm);
+    document.getElementById('calendarEventForm')?.addEventListener('submit', saveCalendarEvent);
+    document.getElementById('calendarEventDate')?.addEventListener('change', (event) => {
+        const formDate = document.getElementById('calendarFormDate');
+        if (formDate && event.target.value) formDate.textContent = calendarThaiDate(event.target.value);
+    });
+    document.getElementById('calendarGrid')?.addEventListener('click', (event) => {
+        const dayButton = event.target.closest('[data-calendar-date]');
+        if (!dayButton) return;
+        calendarUiState.selectedDate = dayButton.dataset.calendarDate;
+        hideCalendarForm();
+        renderCalendarMonth();
+    });
+    document.getElementById('calendarEventsList')?.addEventListener('click', async (event) => {
+        const editButton = event.target.closest('[data-calendar-edit]');
+        if (editButton && calendarUiState.canManage) {
+            const item = calendarUiState.events.find((entry) => String(entry.id) === editButton.dataset.calendarEdit);
+            if (item) showCalendarForm(item);
+            return;
+        }
+        const deleteButton = event.target.closest('[data-calendar-delete]');
+        if (deleteButton && calendarUiState.canManage) {
+            await deleteCalendarEvent(deleteButton.dataset.calendarDelete);
+            return;
+        }
+        if (event.target.closest('#btnCalendarRetry')) await loadCalendarMonth();
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) closeCalendar();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) closeCalendar();
+    });
+}
 
 /* DASHBOARD NUMPAD 9 THEME TOGGLE */
 function applyDashboardTheme(theme) {
