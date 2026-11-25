@@ -3293,3 +3293,162 @@ body {
     border-radius: 14px;
   }
 }
+
+/* ==========================================================================
+   STABLE PANEL SWITCHING + REAL LOADING SKELETONS
+   ========================================================================== */
+
+/* Input icons belong on the trailing side so placeholder text never collides. */
+.login-body .input-wrap .form-control {
+  padding: 12px 44px 12px 15px !important;
+}
+
+.login-body .field-icon {
+  left: auto !important;
+  right: 15px !important;
+}
+
+/* Initial dashboard hydration: reserve the workspace and show its skeleton. */
+.page-dashboard .dashboard-grid.is-loading {
+  align-content: start;
+}
+
+.page-dashboard .dashboard-grid.is-loading > .panel {
+  display: none !important;
+}
+
+.dashboard-skeleton {
+  display: none;
+  grid-column: 1 / -1;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+  width: 100%;
+}
+
+.dashboard-grid.is-loading > .dashboard-skeleton {
+  display: grid;
+}
+
+.dashboard-skeleton-head,
+.dashboard-skeleton-card {
+  min-width: 0;
+  border: 1px solid #e2e9f1;
+  border-radius: 18px;
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 5px 18px rgba(20,44,69,.035);
+}
+
+.dashboard-skeleton-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
+  padding: 17px 20px;
+}
+
+.dashboard-skeleton-avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 13px;
+}
+
+.dashboard-skeleton-head-copy {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+}
+
+.dashboard-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dashboard-skeleton-card {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-height: 220px;
+  padding: clamp(17px, 2.2vw, 26px);
+}
+
+.skeleton-line,
+.skeleton-block,
+.dashboard-skeleton-avatar {
+  display: block;
+  background: linear-gradient(105deg, #edf2f7 8%, #f8fafc 32%, #edf2f7 55%);
+  background-size: 220% 100%;
+  animation: skeletonSweep 1.55s ease-in-out infinite;
+}
+
+.skeleton-line {
+  height: 11px;
+  border-radius: 999px;
+}
+
+.skeleton-line.is-short { width: 34%; }
+.skeleton-line.is-medium { width: 58%; }
+.skeleton-line.is-long { width: 82%; }
+.skeleton-line.is-title { width: 46%; height: 17px; }
+
+.skeleton-block {
+  min-height: 78px;
+  border-radius: 12px;
+}
+
+@keyframes skeletonSweep {
+  0% { background-position: 100% 0; }
+  100% { background-position: -120% 0; }
+}
+
+/* The active panel is animated by the Web Animations API in app.js.
+   No persistent animation classes or forced layout reads are needed. */
+.page-dashboard .dashboard-grid > .panel {
+  backface-visibility: hidden;
+}
+
+.page-dashboard .dashboard-grid > .panel[aria-hidden="true"] {
+  pointer-events: none;
+}
+
+/* Skeleton rows for the first visit to the Intel panel. */
+.intel-skeleton-card {
+  display: grid;
+  gap: 11px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 13px;
+  background: #fff;
+}
+
+.intel-skeleton-card .skeleton-block {
+  min-height: 48px;
+}
+
+.intel-skeleton-card .skeleton-line {
+  background: linear-gradient(105deg, #edf2f7 8%, #f8fafc 32%, #edf2f7 55%);
+  background-size: 220% 100%;
+  animation: skeletonSweep 1.55s ease-in-out infinite;
+}
+
+@media (max-width: 860px) {
+  .dashboard-skeleton-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-skeleton-card {
+    min-height: 172px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line,
+  .skeleton-block,
+  .dashboard-skeleton-avatar,
+  .intel-skeleton-card .skeleton-line {
+    animation: none !important;
+  }
+}
