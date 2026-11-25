@@ -279,8 +279,13 @@ app.post('/api/register', loginLimiter, async (req, res) => {
     if (!uname || !name || !pass) {
       return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ' });
     }
-    if (uname.length < 3) return res.status(400).json({ error: 'ชื่อผู้ใช้สั้นเกินไป' });
-    if (pass.length < 12) return res.status(400).json({ error: 'รหัสผ่านอย่างน้อย 12 ตัวอักษร' });
+    if (uname.length < 3 || uname.length > 64) {
+      return res.status(400).json({ error: 'ชื่อผู้ใช้ต้องมีความยาว 3–64 ตัวอักษร' });
+    }
+    if (name.length > 120) return res.status(400).json({ error: 'ชื่อที่แสดงต้องไม่เกิน 120 ตัวอักษร' });
+    if (pass.length < 12 || Buffer.byteLength(pass, 'utf8') > 72) {
+      return res.status(400).json({ error: 'รหัสผ่านต้องยาวอย่างน้อย 12 ตัวอักษรและไม่เกิน 72 ไบต์' });
+    }
     if (!/^[a-z0-9._\- ]+$/i.test(uname)) {
       return res.status(400).json({ error: 'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษร ตัวเลข . _ - และเว้นวรรค' });
     }
@@ -288,7 +293,7 @@ app.post('/api/register', loginLimiter, async (req, res) => {
     const exists = await sql`SELECT username FROM users WHERE username = ${uname} LIMIT 1`;
     if (exists.length) return res.status(409).json({ error: 'ชื่อผู้ใช้นี้ถูกใช้แล้ว' });
 
-    const hash = await bcrypt.hash(pass, 10);
+    const hash = await bcrypt.hash(pass, 12);
     await sql`
       INSERT INTO users (username, password_hash, display_name, role, avatar, is_admin, can_view_monitoring, description)
       VALUES (
@@ -359,6 +364,10 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       return res.status(400).json({ error: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
     }
     const uname = String(username).trim().toLowerCase();
+    const pass = String(password);
+    if (uname.length > 64 || Buffer.byteLength(pass, 'utf8') > 1024) {
+      return res.status(400).json({ error: 'ข้อมูลเข้าสู่ระบบยาวเกินกำหนด' });
+    }
     const rows = await sql`
       SELECT username, password_hash, display_name AS name, role, avatar,
              is_admin AS "isAdmin", can_view_monitoring AS "canViewMonitoring",
@@ -371,11 +380,17 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     const u = rows[0];
     let ok = false;
     if (u.password_hash && u.password_hash.startsWith('$2')) {
-      ok = await bcrypt.compare(password, u.password_hash);
+      ok = await bcrypt.compare(pass, u.password_hash);
+      // Gradually upgrade legacy bcrypt cost without forcing a mass password reset.
+      if (ok && bcrypt.getRounds(u.password_hash) < 12) {
+        const strongerHash = await bcrypt.hash(pass, 12);
+        await sql`UPDATE users SET password_hash = ${strongerHash} WHERE username = ${uname}`;
+      }
     } else {
-      ok = u.password_hash === password;
+      // One-time migration for legacy plaintext rows, removed after a successful login.
+      ok = u.password_hash === pass;
       if (ok) {
-        const hashed = await bcrypt.hash(password, 10);
+        const hashed = await bcrypt.hash(pass, 12);
         await sql`UPDATE users SET password_hash = ${hashed} WHERE username = ${uname}`;
       }
     }
