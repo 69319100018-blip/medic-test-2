@@ -731,20 +731,29 @@ app.post('/api/fund-tx', authRequired, async (req, res) => {
       WITH updated AS (
         UPDATE central_fund
         SET
-          balance = balance + CASE WHEN ${type} = 'withdraw' THEN -${amt} ELSE ${amt} END,
+          balance = balance + CASE
+            WHEN ${type} = 'withdraw' THEN (0::numeric - ${amt}::numeric)
+            ELSE ${amt}::numeric
+          END,
           cash = CASE
-            WHEN ${type} = 'deposit' THEN cash + ${amt}
-            WHEN ${type} = 'withdraw' THEN GREATEST(0, cash - ${amt})
+            WHEN ${type} = 'deposit' THEN cash + ${amt}::numeric
+            WHEN ${type} = 'withdraw' THEN cash - ${amt}::numeric
             ELSE cash
           END,
           deposit = CASE WHEN ${type} = 'admin_add' AND ${target} = 'deposit'
-                         THEN deposit + ${amt} ELSE deposit END,
+                         THEN deposit + ${amt}::numeric ELSE deposit END,
           reserve = CASE WHEN ${type} = 'admin_add' AND ${target} = 'reserve'
-                         THEN reserve + ${amt} ELSE reserve END,
-          total_income = CASE WHEN ${type} = 'deposit' THEN total_income + ${amt} ELSE total_income END,
-          total_expense = CASE WHEN ${type} = 'withdraw' THEN total_expense + ${amt} ELSE total_expense END,
+                         THEN reserve + ${amt}::numeric ELSE reserve END,
+          total_income = total_income + CASE
+            WHEN ${type} IN ('deposit', 'admin_add') THEN ${amt}::numeric
+            ELSE 0::numeric
+          END,
+          total_expense = total_expense + CASE
+            WHEN ${type} = 'withdraw' THEN ${amt}::numeric
+            ELSE 0::numeric
+          END,
           updated_at = NOW()
-        WHERE id = 1 AND (${type} <> 'withdraw' OR balance >= ${amt})
+        WHERE id = 1 AND (${type} <> 'withdraw' OR cash >= ${amt}::numeric)
         RETURNING balance
       ),
       history AS (
@@ -757,9 +766,16 @@ app.post('/api/fund-tx', authRequired, async (req, res) => {
     `;
 
     if (!result.length) {
-      const exists = await sql`SELECT id FROM central_fund WHERE id = 1`;
+      const exists = await sql`SELECT id, cash, balance FROM central_fund WHERE id = 1`;
       if (!exists.length) return res.status(500).json({ error: 'ไม่พบข้อมูลกองกลาง' });
-      return res.status(409).json({ error: 'ยอดเงินไม่เพียงพอสำหรับรายการนี้' });
+      const availableCash = Number(exists[0].cash) || 0;
+      if (type === 'withdraw' && availableCash < amt) {
+        return res.status(409).json({
+          error: `เงินสดในกองกลางไม่เพียงพอ คงเหลือ ${availableCash.toLocaleString('th-TH')} บาท`,
+          availableCash
+        });
+      }
+      return res.status(409).json({ error: 'ไม่สามารถบันทึกรายการได้ กรุณาลองใหม่' });
     }
 
     const balance = Number(result[0].balance);
@@ -844,7 +860,7 @@ app.patch('/api/stock-item', authRequired, async (req, res) => {
     if (!needDb(res)) return;
     const rawId = req.body?.id ?? req.query?.id;
     const id = String(rawId ?? '');
-    if (!/^[1-9]\\d{0,18}$/.test(id)) return res.status(400).json({ error: 'รหัสรายการไม่ถูกต้อง' });
+    if (!/^[1-9]\d{0,18}$/.test(id)) return res.status(400).json({ error: 'รหัสรายการไม่ถูกต้อง' });
 
     const { quantity, minQuantity, manualStatus, delta } = req.body || {};
     if (delta !== undefined) {
@@ -864,6 +880,7 @@ app.patch('/api/stock-item', authRequired, async (req, res) => {
       const memo = String(note || '').trim();
       const unitPrice = Number(price);
       if (requestedBy.length > 200) return res.status(400).json({ error: 'ชื่อผู้เบิกต้องไม่เกิน 200 ตัวอักษร' });
+      if (amount < 0 && !requestedBy) return res.status(400).json({ error: 'กรุณาระบุชื่อผู้เบิก' });
       if (memo.length > 500) return res.status(400).json({ error: 'หมายเหตุต้องไม่เกิน 500 ตัวอักษร' });
       if (!Number.isFinite(unitPrice) || unitPrice < 0 || unitPrice > 9999999999.99 ||
           Math.abs(unitPrice * 100 - Math.round(unitPrice * 100)) > 1e-7) {
