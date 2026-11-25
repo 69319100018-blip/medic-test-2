@@ -181,6 +181,17 @@
         if (typeof showAlert === 'function') showAlert('ข้อมูลไม่ถูกต้อง', 'กรุณากรอกจำนวนเงินที่มากกว่า 0', 'warning');
         return;
       }
+      if (!['deposit', 'withdraw'].includes(type)) {
+        if (typeof showAlert === 'function') showAlert('ประเภทรายการไม่ถูกต้อง', 'กรุณาเลือกฝากหรือถอนเงิน', 'warning');
+        return;
+      }
+      const availableCash = Number(centralFund?.allocations?.cash) || 0;
+      if (type === 'withdraw' && amount > availableCash) {
+        if (typeof showAlert === 'function') {
+          showAlert('เงินสดไม่เพียงพอ', `เงินสดคงเหลือ ${availableCash.toLocaleString('th-TH')} บาท`, 'error');
+        }
+        return;
+      }
       const btn = document.getElementById(type === 'deposit' ? 'btnFundDeposit' : 'btnFundWithdraw');
       if (btn) btn.disabled = true;
       try {
@@ -269,25 +280,48 @@
         if (isAdd) {
           const result = await Swal.fire({
             title: `เติมสต็อก "${item.name}"`,
-            input: 'number', inputValue: 1,
+            input: 'number',
+            inputValue: 1,
             inputAttributes: { min: 1, step: 1 },
-            showCancelButton: true, confirmButtonText: 'เติมสต็อก', cancelButtonText: 'ยกเลิก',
-            confirmButtonColor: '#16a34a'
+            showCancelButton: true,
+            confirmButtonText: 'เติมสต็อก',
+            cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: '#16a34a',
+            inputValidator: (value) => {
+              const qty = Number(value);
+              return Number.isSafeInteger(qty) && qty > 0 ? undefined : 'กรุณาระบุจำนวนเต็มมากกว่า 0';
+            }
           });
           if (!result.isConfirmed) return;
-          amount = Math.floor(Number(result.value)) || 1;
+          amount = Number(result.value);
         } else {
           const { value: formValues } = await Swal.fire({
             title: `เบิก/ใช้ "${item.name}"`,
-            html: '<input id="swal-qty" type="number" min="1" value="1" class="swal2-input" placeholder="จำนวน">' +
-                  '<input id="swal-req" class="swal2-input" placeholder="ชื่อผู้เบิก">' +
-                  '<input id="swal-price" type="number" min="0" value="0" class="swal2-input" placeholder="ราคา (ถ้ามี)">',
-            focusConfirm: false, showCancelButton: true, confirmButtonText: 'เบิก', cancelButtonText: 'ยกเลิก',
-            preConfirm: () => ({
-              qty: Math.floor(Number(document.getElementById('swal-qty').value)) || 1,
-              requester: document.getElementById('swal-req').value.trim(),
-              price: Number(document.getElementById('swal-price').value) || 0
-            })
+            html: '<input id="swal-qty" type="number" min="1" step="1" value="1" class="swal2-input" placeholder="จำนวน">' +
+                  '<input id="swal-req" class="swal2-input" maxlength="200" placeholder="ชื่อผู้เบิก">' +
+                  '<input id="swal-price" type="number" min="0" step="0.01" value="0" class="swal2-input" placeholder="ราคาต่อชิ้น (ถ้ามี)">',
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'เบิก',
+            cancelButtonText: 'ยกเลิก',
+            preConfirm: () => {
+              const qty = Number(document.getElementById('swal-qty')?.value);
+              const name = document.getElementById('swal-req')?.value.trim() || '';
+              const unitPrice = Number(document.getElementById('swal-price')?.value);
+              if (!Number.isSafeInteger(qty) || qty <= 0) {
+                Swal.showValidationMessage('กรุณาระบุจำนวนเต็มมากกว่า 0');
+                return false;
+              }
+              if (!name) {
+                Swal.showValidationMessage('กรุณาระบุชื่อผู้เบิก');
+                return false;
+              }
+              if (!Number.isFinite(unitPrice) || unitPrice < 0 || Math.abs(unitPrice * 100 - Math.round(unitPrice * 100)) > 1e-7) {
+                Swal.showValidationMessage('ราคาต้องไม่ติดลบและมีทศนิยมไม่เกิน 2 ตำแหน่ง');
+                return false;
+              }
+              return { qty, requester: name, price: unitPrice };
+            }
           });
           if (!formValues) return;
           amount = formValues.qty;
@@ -297,7 +331,32 @@
       } else {
         const raw = prompt(isAdd ? 'จำนวนที่เติม:' : 'จำนวนที่เบิก:', '1');
         if (raw === null) return;
-        amount = Math.floor(Number(raw)) || 1;
+        amount = Number(raw);
+        if (!isAdd) {
+          const name = prompt('ชื่อผู้เบิก:', '');
+          if (name === null) return;
+          requester = name.trim();
+          const rawPrice = prompt('ราคาต่อชิ้น (บาท):', '0');
+          if (rawPrice === null) return;
+          price = Number(rawPrice);
+        }
+      }
+
+      if (!Number.isSafeInteger(amount) || amount <= 0) {
+        if (typeof showAlert === 'function') showAlert('จำนวนไม่ถูกต้อง', 'กรุณาระบุจำนวนเต็มมากกว่า 0', 'warning');
+        return;
+      }
+      if (!isAdd && !requester) {
+        if (typeof showAlert === 'function') showAlert('ข้อมูลไม่ครบ', 'กรุณาระบุชื่อผู้เบิก', 'warning');
+        return;
+      }
+      if (!isAdd && amount > Number(item.quantity)) {
+        if (typeof showAlert === 'function') showAlert('สต็อกไม่พอ', `คงเหลือเพียง ${item.quantity} ชิ้น`, 'error');
+        return;
+      }
+      if (!Number.isFinite(price) || price < 0 || Math.abs(price * 100 - Math.round(price * 100)) > 1e-7) {
+        if (typeof showAlert === 'function') showAlert('ราคาไม่ถูกต้อง', 'ราคาต้องไม่ติดลบและมีทศนิยมไม่เกิน 2 ตำแหน่ง', 'warning');
+        return;
       }
 
       const delta = isAdd ? amount : -amount;
@@ -305,7 +364,8 @@
         await apiAdjustStock(id, delta, { requester, price });
         stockItems = await apiLoadStock();
         if (typeof canViewMonitoring === 'function' && canViewMonitoring(currentUser)) {
-          try { stockWithdrawals = await apiLoadStockWithdrawals(); } catch (_) {}
+          stockWithdrawals = await apiLoadStockWithdrawals();
+          if (typeof renderStockWithdrawals === 'function') renderStockWithdrawals();
         }
         if (typeof renderStock === 'function') renderStock();
         if (typeof showAlert === 'function') {
