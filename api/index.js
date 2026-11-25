@@ -15,6 +15,7 @@ const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
+const { canManageCalendar } = require('./calendar-permissions');
 
 const app = express();
 // Vercel terminates TLS/proxy traffic and forwards the client IP in X-Forwarded-For.
@@ -142,6 +143,13 @@ function stockManagerRequired(req, res, next) {
   const role = String(req.user?.role || '').toLowerCase();
   const director = role.includes('ผู้อำนวยการ') && !role.includes('รอง');
   if (!req.user?.isAdmin && !director) return res.status(403).json({ error: 'ไม่มีสิทธิ์จัดการสต็อก' });
+  return next();
+}
+
+function calendarManagerRequired(req, res, next) {
+  if (!canManageCalendar(req.user)) {
+    return res.status(403).json({ error: 'เฉพาะรองผู้อำนวยการขึ้นไปเท่านั้นที่จัดการปฏิทินได้' });
+  }
   return next();
 }
 
@@ -1053,6 +1061,140 @@ app.delete('/api/vehicle-item', authRequired, async (req, res) => {
     }
     await sql`DELETE FROM vehicles WHERE id = ${id}`;
     res.json({ ok: true });
+  } catch (err) {
+    safeError(res, err);
+  }
+});
+
+// ---------- Shared calendar events ----------
+function isValidCalendarDate(value) {
+  if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.toISOString().slice(0, 10) === value;
+}
+
+function parseCalendarEventInput(body) {
+  const date = String(body?.date || '').trim();
+  const title = String(body?.title || '').trim();
+  const description = String(body?.description || '').trim();
+  const location = String(body?.location || '').trim();
+  const startTime = String(body?.startTime || '').trim() || null;
+  const endTime = String(body?.endTime || '').trim() || null;
+
+  if (!isValidCalendarDate(date)) return { error: 'กรุณาเลือกวันที่ที่ถูกต้อง' };
+  if (!title || title.length > 160) return { error: 'ชื่อกิจกรรมต้องมีความยาว 1–160 ตัวอักษร' };
+  if (description.length > 3000) return { error: 'รายละเอียดกิจกรรมยาวเกิน 3,000 ตัวอักษร' };
+  if (location.length > 180) return { error: 'สถานที่ยาวเกิน 180 ตัวอักษร' };
+  const validTime = (value) => !value || /^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(value);
+  if (!validTime(startTime) || !validTime(endTime)) return { error: 'รูปแบบเวลาไม่ถูกต้อง' };
+  if (endTime && !startTime) return { error: 'กรุณาระบุเวลาเริ่มก่อนเวลาเสร็จสิ้น' };
+  if (startTime && endTime && endTime < startTime) return { error: 'เวลาเสร็จสิ้นต้องไม่ก่อนเวลาเริ่ม' };
+
+  return {
+    value: {
+      date,
+      title,
+      description: description || null,
+      location: location || null,
+      startTime,
+      endTime
+    }
+  };
+}
+
+app.get('/api/calendar-events', authRequired, async (req, res) => {
+  try {
+    if (!needDb(res)) return;
+    const from = String(req.query.from || '').trim();
+    const to = String(req.query.to || '').trim();
+    if (!isValidCalendarDate(from) || !isValidCalendarDate(to) || from > to) {
+      return res.status(400).json({ error: 'ช่วงวันที่ปฏิทินไม่ถูกต้อง' });
+    }
+    const daySpan = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000;
+    if (daySpan > 92) return res.status(400).json({ error: 'เลือกดูปฏิทินได้ครั้งละไม่เกิน 93 วัน' });
+
+    const rows = await sql`
+      SELECT e.id::text AS id,
+             TO_CHAR(e.event_date, 'YYYY-MM-DD') AS date,
+             e.title, e.description,
+             CASE WHEN e.start_time IS NULL THEN NULL ELSE TO_CHAR(e.start_time, 'HH24:MI') END AS "startTime",
+             CASE WHEN e.end_time IS NULL THEN NULL ELSE TO_CHAR(e.end_time, 'HH24:MI') END AS "endTime",
+             e.location,
+             COALESCE(u.display_name, e.created_by, 'ผู้ใช้งานเดิม') AS "createdByName",
+             e.created_at AS "createdAt",
+             e.updated_at AS "updatedAt"
+      FROM public.calendar_events e
+      LEFT JOIN public.users u ON u.username = e.created_by
+      WHERE e.event_date >= ${from}::date AND e.event_date <= ${to}::date
+      ORDER BY e.event_date ASC, e.start_time ASC NULLS FIRST, e.created_at ASC, e.id ASC
+    `;
+    return res.json(rows);
+  } catch (err) {
+    safeError(res, err);
+  }
+});
+
+app.post('/api/calendar-events', authRequired, calendarManagerRequired, async (req, res) => {
+  try {
+    if (!needDb(res)) return;
+    const parsed = parseCalendarEventInput(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const event = parsed.value;
+    const rows = await sql`
+      INSERT INTO public.calendar_events
+        (event_date, title, description, start_time, end_time, location, created_by, updated_by)
+      VALUES
+        (${event.date}::date, ${event.title}, ${event.description},
+         ${event.startTime}::time, ${event.endTime}::time, ${event.location},
+         ${req.user.sub}, ${req.user.sub})
+      RETURNING id::text AS id
+    `;
+    return res.status(201).json({ ok: true, id: rows[0].id });
+  } catch (err) {
+    safeError(res, err);
+  }
+});
+
+app.patch('/api/calendar-event', authRequired, calendarManagerRequired, async (req, res) => {
+  try {
+    if (!needDb(res)) return;
+    const id = String(req.body?.id || '').trim();
+    if (!/^[1-9]\\d{0,18}$/.test(id)) return res.status(400).json({ error: 'รหัสกิจกรรมไม่ถูกต้อง' });
+    const parsed = parseCalendarEventInput(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const event = parsed.value;
+    const rows = await sql`
+      UPDATE public.calendar_events
+      SET event_date = ${event.date}::date,
+          title = ${event.title},
+          description = ${event.description},
+          start_time = ${event.startTime}::time,
+          end_time = ${event.endTime}::time,
+          location = ${event.location},
+          updated_by = ${req.user.sub},
+          updated_at = NOW()
+      WHERE id = ${id}::bigint
+      RETURNING id::text AS id
+    `;
+    if (!rows.length) return res.status(404).json({ error: 'ไม่พบกิจกรรมนี้' });
+    return res.json({ ok: true, id: rows[0].id });
+  } catch (err) {
+    safeError(res, err);
+  }
+});
+
+app.delete('/api/calendar-event', authRequired, calendarManagerRequired, async (req, res) => {
+  try {
+    if (!needDb(res)) return;
+    const id = String(req.body?.id || req.query?.id || '').trim();
+    if (!/^[1-9]\\d{0,18}$/.test(id)) return res.status(400).json({ error: 'รหัสกิจกรรมไม่ถูกต้อง' });
+    const rows = await sql`
+      DELETE FROM public.calendar_events WHERE id = ${id}::bigint
+      RETURNING id::text AS id
+    `;
+    if (!rows.length) return res.status(404).json({ error: 'ไม่พบกิจกรรมนี้' });
+    return res.json({ ok: true });
   } catch (err) {
     safeError(res, err);
   }

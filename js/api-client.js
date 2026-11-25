@@ -159,6 +159,23 @@ async function apiDeleteVehicle(id) {
   return api('/vehicle-item', { method: 'DELETE', body: { id } });
 }
 
+async function apiLoadCalendarEvents(from, to) {
+  const query = `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  return api(`/calendar-events${query}`);
+}
+
+async function apiCreateCalendarEvent(payload) {
+  return api('/calendar-events', { method: 'POST', body: payload });
+}
+
+async function apiUpdateCalendarEvent(payload) {
+  return api('/calendar-event', { method: 'PATCH', body: payload });
+}
+
+async function apiDeleteCalendarEvent(id) {
+  return api('/calendar-event', { method: 'DELETE', body: { id } });
+}
+
 async function apiLoadDoctors() {
   return api('/doctors');
 }
