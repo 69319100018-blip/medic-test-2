@@ -41,7 +41,8 @@ Configure `DATABASE_URL`, `JWT_SECRET`, and exact `ALLOWED_ORIGINS` in Vercel fo
 Set these server-side environment variables in Vercel (Production) as encrypted secrets:
 
 - `DISCORD_WEBHOOK_URL` — shift check-in/check-out channel
-- `DISCORD_WEBHOOK_FUND_STOCK` — fund transactions and stock add/withdraw channel
+- `DISCORD_WEBHOOK_FUND` — central fund deposits, withdrawals, and admin adjustments
+- `DISCORD_WEBHOOK_STOCK` — stock add/withdraw channel (the existing `DISCORD_WEBHOOK_FUND_STOCK` key remains supported as a legacy fallback)
 - `DISCORD_WEBHOOK_VEHICLE` — vehicle registration channel
 
 Each webhook URL already identifies its destination channel; a Discord server ID is not required for webhook delivery. Do not use a `NEXT_PUBLIC_` prefix. Local development can set the same keys in `server-local/.env`. Notifications are sent only after the database transaction succeeds, and Discord failures do not roll back the application action.
