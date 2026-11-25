@@ -1,98 +1,58 @@
-# วิธีเชื่อมเว็บ Medic Shift Log เข้ากับฐานข้อมูล Neon
+# วิธีติดตั้งและเชื่อมต่อ Medic Shift Log
 
-ทำตามลำดับ 3 ขั้นตอนนี้ ใช้เวลาประมาณ 10 นาที
+คู่มือนี้อ้างอิงโครงสร้างและ API entry point ใน branch ที่กำลังปรับปรุง ไม่ใช่ขั้นตอน deploy แบบลากวางของเวอร์ชันเก่า
 
----
+## 1. เตรียมฐานข้อมูล Neon
 
-## ขั้นที่ 1: สร้างตารางใน Neon (2 นาที)
+1. สร้างหรือเลือก PostgreSQL project ใน Neon
+2. สำรองข้อมูลเดิมก่อนเปลี่ยน schema
+3. เปิด SQL Editor และตรวจทานไฟล์ `schema.sql` ก่อน apply
+4. Schema ปัจจุบันประกอบด้วยตาราง `users`, `shift_logs`, `central_fund`, `fund_history`, `stock_items`, `stock_withdrawals`, `vehicles`, `doctors`, `device_sessions`, `security_bans` และ `security_events`
 
-1. เข้า https://console.neon.tech แล้วเลือกโปรเจกต์ของคุณ
-2. ไปที่เมนู **SQL Editor**
-3. เปิดไฟล์ `schema.sql` ในโฟลเดอร์นี้ ก๊อปปี้ทั้งหมดไปวาง แล้วกด **Run**
-4. จะได้ตาราง: `shift_events`, `fund_state`, `fund_history`, `stock_items`, `stock_withdrawals`, `vehicles`, และ `doctors` (รายชื่อแพทย์)
+อย่าใช้รายการตารางจากเอกสารเก่าที่อ้าง `shift_events` หรือ `fund_state` เพราะไม่ตรงกับ schema ปัจจุบัน
 
-## ขั้นที่ 2: เอา Connection String ไปใส่ใน Vercel (3 นาที)
+## 2. ตั้งค่า local environment
 
-1. ใน Neon Dashboard หน้าแรกของโปรเจกต์ กดปุ่ม **Connect**
-2. ก๊อปปี้ **Connection string** จะหน้าตาประมาณนี้:
-   ```
-   postgresql://user:password@ep-xxxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
-   ```
-3. เข้า https://vercel.com เลือกโปรเจกต์ **frosty-hat-40635913**
-4. ไปที่ **Settings → Environment Variables**
-5. เพิ่มตัวแปร:
-   - **Name:** `DATABASE_URL`
-   - **Value:** (วาง connection string ที่ก๊อปมา)
-   - กด **Save**
+1. คัดลอก `server-local/env.example` เป็น `server-local/.env`
+2. กำหนดค่า `DATABASE_URL` จาก Neon
+3. สร้าง `JWT_SECRET` ใหม่ด้วยคำสั่ง `openssl rand -hex 32` และเก็บไว้เป็นความลับ
+4. ตั้ง `ALLOWED_ORIGINS=http://localhost:3000` สำหรับ local development
+5. อย่า commit `.env`, connection string หรือ JWT secret
 
-> สำคัญ: ห้ามเอา connection string ไปวางในโค้ดหน้าเว็บเด็ดขาด เพราะใครก็เห็นได้
-> ต้องใส่ใน Environment Variables เท่านั้น (โค้ดในโฟลเดอร์ api/ จะอ่านค่านี้เอง)
+จาก root ของ repository รัน:
 
-## ขั้นที่ 3: อัปโหลดไฟล์ใหม่ขึ้น Vercel (5 นาที)
-
-โครงสร้างโฟลเดอร์ (หลังจัดระเบียบแล้ว):
-
-```
-kimi/
-├── index.html              ← หน้าเข้าสู่ระบบ
-├── dashboard.html          ← หน้าแดชบอร์ดหลัก
-├── package.json
-├── package-lock.json
-├── schema.sql              ← สร้างตารางใน Neon (ไม่ต้องอัปขึ้นเว็บก็ได้)
-├── README-วิธีติดตั้ง.md
-├── api/                    ← Vercel Serverless Functions
-│   ├── shift.js            ← API ระบบเวร
-│   ├── fund.js             ← API เงินกองกลาง
-│   ├── stock.js            ← API สต็อก
-│   ├── vehicle.js          ← API ทะเบียนรถ
-│   └── doctors.js          ← API รายชื่อแพทย์
-├── css/
-│   └── style.css
-├── js/
-│   └── app.js              ← โค้ดฝั่งหน้าเว็บ (ดึงข้อมูลจาก API)
-└── assets/
-    ├── images/             ← รูปโปรไฟล์ / โลโก้
-    │   ├── talos.jpg
-    │   ├── 123.jpg
-    │   └── IMG_4433.jpg
-    └── videos/             ← วิดีโอพื้นหลังหน้า login
-        ├── bg1-h264.mp4
-        ├── bg1.mp4
-        ├── bg2.mp4
-        ├── bg3-h264.mp4
-        └── bg3.mp4
+```bash
+npm ci
+npm start
 ```
 
-วิธีอัปโหลด (เลือกอย่างใดอย่างหนึ่ง):
+จากนั้นเปิด `http://localhost:3000/index.html` สำหรับ hot reload ใช้ `npm run dev`
 
-**วิธี A — ลากวางในเว็บ Vercel (ง่ายสุด)**
-1. เข้าโปรเจกต์ frosty-hat-40635913 ใน Vercel → แท็บ **Deployments**
-2. ถ้าเดิมเคย deploy ด้วยการลากวาง ให้ลากโฟลเดอร์นี้ทั้งโฟลเดอร์ไปวางที่หน้า Deployments
-   (หรือใช้ `vercel deploy` จาก command line)
+## 3. ตั้งค่า Vercel
 
-**วิธี B — ผูก GitHub (แนะนำในระยะยาว)**
-1. สร้าง repo บน GitHub แล้วอัปโหลดไฟล์ทั้งหมดขึ้นไป
-2. ใน Vercel: **Add New → Project → Import repo**
-3. ทุกครั้งที่แก้โค้ดแล้ว push เว็บจะอัปเดทเองอัตโนมัติ
+1. Import repository นี้เข้า Vercel โดยเลือก branch ที่ต้องการ deploy
+2. ตั้ง Environment Variables สำหรับแต่ละ environment:
+   - `DATABASE_URL`: Neon connection string
+   - `JWT_SECRET`: ค่าสุ่มยาวอย่างน้อย 32 ตัวอักษร
+   - `ALLOWED_ORIGINS`: origin ของ frontend ที่อนุญาตแบบ exact match คั่นด้วย comma
+   - `DISCORD_WEBHOOK_URL` และ webhook เฉพาะโมดูล เฉพาะเมื่อเปิดใช้งานจริง
+3. ห้ามใช้ wildcard origin (`*`) และห้ามใส่ secrets ใน frontend
+4. ตรวจผล CI และ Preview Deployment ก่อน Promote ไป Production
 
-## ทดสอบว่าใช้ได้
+Vercel API entry point ปัจจุบันคือ `api/index.js`; ไฟล์ route แยกใน `api/` เป็น legacy code ที่ต้องผ่านการตรวจและรวมให้เหลือ implementation เดียวในงาน refactor ระยะถัดไป
 
-1. เปิดเว็บ https://medic-test.vercel.app ใน 2 เบราว์เซอร์ (หรือ 2 เครื่อง)
-2. เครื่องแรก: ล็อกอิน talos blackagency → กด "เข้าเวร" หรือ "ฝากเงิน"
-3. เครื่องสอง: ล็อกอิน noelle blackagency → **ภายใน 3 วินาที** จะเห็นข้อมูลอัปเดทเองโดยไม่ต้องรีเฟรช
+## 4. การเข้าสู่ระบบและบัญชีผู้ใช้
 
----
+- หน้า login ใช้ API และ JWT ไม่ได้ตรวจรหัสผ่านจาก JavaScript ฝั่ง browser
+- สมัครสมาชิกผ่านหน้า Register โดยรหัสผ่านใหม่ต้องยาวอย่างน้อย 12 ตัวอักษร
+- สิทธิ์ role และ admin ต้องถูกกำหนดจากข้อมูลฝั่งฐานข้อมูล
+- ห้ามเผยแพร่บัญชีตัวอย่างหรือรหัสผ่านเริ่มต้นในเอกสารสาธารณะ
+- ก่อนใช้งานจริง ให้เปลี่ยนหรือลบบัญชี seed ที่มีอยู่ และตรวจสิทธิ์ admin ทุกบัญชี
 
-## สิ่งที่เปลี่ยนไปจากเวอร์ชันเดิม
+## 5. ข้อควรทราบก่อนใช้งานจริง
 
-- **ข้อมูลเวรและเงินกองกลาง** เก็บใน Neon กลาง ทุกคนเห็นข้อมูลชุดเดียวกัน
-- หน้าเว็บดึงข้อมูลใหม่อัตโนมัติ**ทุก 3 วินาที** (polling)
-- ประวัติฝาก/ถอนจะแสดง**ชื่อคนทำรายการ**ด้วย
-- เวลาทั้งหมดอ้างอิง**เวลาไทย (Asia/Bangkok)** จากฝั่งเซิร์ฟเวอร์ ไม่ขึ้นกับนาฬิกาเครื่องใคร
+ข้อมูลเดิมที่เก็บอยู่ใน `localStorage` ของแต่ละเครื่องจะไม่ถูกย้ายเข้า Neon โดยอัตโนมัติ ต้องวางแผนตรวจสอบและ migrate ข้อมูลเป็นรายระบบก่อน หากข้อมูลเดิมมีความสำคัญ
 
-## ข้อควรรู้ (ยังไม่ได้แก้ในเวอร์ชันนี้)
+ไฟล์ environment ที่เคยอยู่ใน public repository ถูกนำออกจาก branch ใหม่แล้ว แต่การลบไฟล์ใน commit ใหม่ไม่ได้ลบ credential ออกจาก Git history โปรดทำตาม [Security Remediation](docs/SECURITY-REMEDIATION.md) และหมุนเวียน secret ก่อน merge หรือ deploy
 
-- **รหัสผ่านยังอยู่ในโค้ด `js/app.js`** ใครกด View Source ก็เห็น — ถ้าอยากให้ปลอดภัยจริง
-  ต้องย้ายระบบล็อกอินไปตรวจฝั่งเซิร์ฟเวอร์ด้วย บอกได้ถ้าอยากทำต่อ
-- ข้อมูลเดิมที่เคยอยู่ใน localStorage ของแต่ละเครื่อง**จะไม่ถูกย้าย**เข้าฐานข้อมูล
-  (เวอร์ชันใหม่เริ่มนับจากฐานข้อมูลเป็นหลัก)
+ดูภาพรวมสถาปัตยกรรมที่ [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) และแนวทางความปลอดภัยที่ [SECURITY.md](SECURITY.md)
