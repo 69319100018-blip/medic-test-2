@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Medic Shift Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,37 +37,37 @@
         </header>
 
         <nav class="dashboard-nav" aria-label="เมนูหลัก">
-            <button class="nav-link active" data-target="overviewSection">
+            <button class="nav-link active" data-target="overviewSection" aria-label="ภาพรวม">
                 <i class="bi bi-grid-1x2"></i> ภาพรวม
             </button>
-            <button class="nav-link" data-target="fundsSection">
+            <button class="nav-link" data-target="fundsSection" aria-label="เงินกองกลาง">
                 <i class="bi bi-wallet2"></i> เงินกองกลาง
             </button>
-            <button class="nav-link" data-target="stockSection">
+            <button class="nav-link" data-target="stockSection" aria-label="สต็อกอุปกรณ์">
                 <i class="bi bi-box-seam"></i> สต็อกอุปกรณ์
             </button>
-            <button class="nav-link" data-target="vehicleSection">
+            <button class="nav-link" data-target="vehicleSection" aria-label="ทะเบียนรถ">
                 <i class="bi bi-car-front"></i> ทะเบียนรถ
             </button>
-            <button class="nav-link" data-target="doctorsSection">
+            <button class="nav-link" data-target="doctorsSection" aria-label="รายชื่อแพทย์">
                 <i class="bi bi-people"></i> รายชื่อแพทย์
             </button>
-            <button class="nav-link" data-target="historySection">
+            <button class="nav-link" data-target="historySection" aria-label="ประวัติ">
                 <i class="bi bi-clock-history"></i> ประวัติ
             </button>
-            <button class="nav-link" data-target="stockHistorySection">
+            <button class="nav-link" data-target="stockHistorySection" aria-label="ประวัติการเบิก">
                 <i class="bi bi-clipboard2-data"></i> ประวัติการเบิก
             </button>
-            <button class="nav-link" data-target="adminSection">
+            <button class="nav-link" data-target="adminSection" aria-label="ตรวจสอบ">
                 <i class="bi bi-shield-check"></i> ตรวจสอบ
             </button>
-            <button class="nav-link hidden" data-target="securitySection" id="navSecurity">
+            <button class="nav-link hidden" data-target="securitySection" aria-label="ความปลอดภัย" id="navSecurity">
                 <i class="bi bi-shield-lock"></i> ความปลอดภัย
             </button>
-            <button class="nav-link hidden" data-target="membersSection" id="navMembers">
+            <button class="nav-link hidden" data-target="membersSection" aria-label="สมาชิก / Role" id="navMembers">
                 <i class="bi bi-person-gear"></i> สมาชิก / Role
             </button>
-            <button class="nav-link hidden" data-target="intelSection" id="navIntel" title="เมนูลับ">
+            <button class="nav-link hidden" data-target="intelSection" aria-label="Intel" id="navIntel" title="เมนูลับ">
                 <i class="bi bi-radar"></i> Intel
             </button>
         </nav>
