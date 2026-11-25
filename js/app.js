@@ -1,14 +1,12 @@
-const userProfiles = {
-    "talos blackagency": { name: "Talos Blackagency", role: "ผู้อำนวยการแพทย์", avatar: "assets/images/talos.jpg", isAdmin: true, canViewMonitoring: true, desc: "ควบคุมและตรวจสอบทีมเวร" },
-    "noelle blackagency": { name: "Noelle Blackagency", role: "รองผู้อำนวยการแพทย์", avatar: "assets/images/noeele.jpg", isAdmin: false, canViewMonitoring: false, desc: "สนับสนุนงานประสานงาน" },
-    "jane doe": { name: "Jane Doe", role: "นักเรียนแพทย์", avatar: "assets/images/jane.jpg", isAdmin: false, canViewMonitoring: false, desc: "ดูแลผู้ป่วย" }
-};
+// User records and permissions are hydrated from the authenticated API session.
+const userProfiles = {};
+let users = {};
 
 const manualUrl = "https://docs.google.com/spreadsheets/d/1vGjzD5YZiiBs65yBodjtxsoUPQVr_EMMnfqRXWbOZrI/edit?gid=749978115#gid=749978115";
 const rulesUrl = "https://sites.google.com/bic.ac.th/mediclightcity/%E0%B8%84%E0%B8%93%E0%B8%AA%E0%B8%A1%E0%B8%9A%E0%B8%95%E0%B8%82%E0%B8%AD%E0%B8%87%E0%B8%81%E0%B8%B2%E0%B8%A3%E0%B9%80%E0%B8%9B%E0%B8%99%E0%B9%81%E0%B8%9E%E0%B8%97%E0%B8%A2";
 
 // ============================================================
-// DATA LAYER — เก็บข้อมูลในเครื่อง (localStorage) เท่านั้น
+// DATA LAYER — transient UI state; authenticated records are hydrated from the API
 // ============================================================
 let shiftLog = {};
 let currentUser = null;

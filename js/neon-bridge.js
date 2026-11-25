@@ -74,7 +74,9 @@
         }
         try {
           const allUsers = await apiLoadUsers();
-          Object.assign(userProfiles || {}, allUsers);
+          users = allUsers;
+          Object.keys(userProfiles).forEach((username) => delete userProfiles[username]);
+          Object.assign(userProfiles, allUsers);
         } catch (_) {}
 
         shiftLog = await apiLoadShifts();
