@@ -3168,3 +3168,128 @@ body {
     padding-right: max(var(--page-gutter), env(safe-area-inset-right)) !important;
   }
 }
+
+/* ==========================================================================
+   LOGIN RESPONSIVE HOTFIX — one-column mobile grid + icon/input spacing
+   ========================================================================== */
+
+/* The original two-track grid has a 360px minimum on the form track.
+   Switch to a true single track before that minimum can overflow. */
+@media (max-width: 900px) {
+  .login-body .login-page {
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100svh;
+    padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    overflow-x: clip;
+  }
+
+  .login-body .login-inner {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto;
+    align-items: stretch;
+    gap: clamp(12px, 3vw, 18px);
+    width: min(100%, 480px);
+    max-width: 480px;
+    min-width: 0;
+    margin: auto;
+  }
+
+  .login-body .login-brand {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    padding: clamp(18px, 4vw, 24px);
+    border-radius: 18px;
+  }
+
+  .login-body .brand-logo-wrap {
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .login-body .login-brand h1 {
+    font-size: clamp(1.75rem, 6vw, 2.35rem);
+  }
+
+  .login-body .login-brand .tagline {
+    margin-bottom: 8px;
+    font-size: .88rem;
+  }
+
+  .login-body .login-brand .desc {
+    max-width: 100%;
+    font-size: .84rem;
+    line-height: 1.65;
+  }
+
+  .login-body .feature-chips {
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .login-body .feature-chips span {
+    padding: 7px 9px;
+    font-size: .72rem;
+  }
+
+  .login-body .login-card,
+  .login-body .login-card.is-near,
+  .login-body .login-card.is-faded {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    align-self: stretch;
+    padding: clamp(20px, 4vw, 28px);
+    border-radius: 18px;
+  }
+}
+
+/* Icons sit inside the left side of the fields; keep placeholder text clear. */
+.login-body .input-wrap .form-control {
+  padding-left: 44px !important;
+  padding-right: 15px !important;
+}
+
+.login-body .field-icon {
+  left: 15px;
+  right: auto;
+}
+
+@media (max-width: 359px) {
+  .login-body .login-page {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .login-body .login-inner {
+    gap: 10px;
+  }
+
+  .login-body .login-brand {
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .login-body .login-brand .desc {
+    font-size: .78rem;
+  }
+
+  .login-body .feature-chips {
+    gap: 5px;
+    margin-top: 10px;
+  }
+
+  .login-body .feature-chips span {
+    padding: 6px 7px;
+    font-size: .66rem;
+  }
+
+  .login-body .login-card,
+  .login-body .login-card.is-near,
+  .login-body .login-card.is-faded {
+    padding: 18px 14px;
+    border-radius: 14px;
+  }
+}
