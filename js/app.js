@@ -1850,6 +1850,38 @@ function handleLogin(e) {
         .finally(() => { if (btn) btn.disabled = false; });
 }
 
+
+/* DASHBOARD NUMPAD 9 THEME TOGGLE */
+function applyDashboardTheme(theme, persist = true) {
+    const body = document.body;
+    if (!body?.classList.contains('dashboard-body')) return;
+    const isDark = theme === 'dark';
+    body.classList.toggle('theme-dark', isDark);
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+    if (persist) {
+        try { localStorage.setItem('medic_dashboard_theme', isDark ? 'dark' : 'light'); }
+        catch (_e) { /* Theme remains active for this page if storage is blocked. */ }
+    }
+}
+
+function setupDashboardThemeShortcut() {
+    if (!document.body?.classList.contains('dashboard-body') || window.__dashboardThemeShortcutBound) return;
+    window.__dashboardThemeShortcutBound = true;
+    let savedTheme = 'light';
+    try { savedTheme = localStorage.getItem('medic_dashboard_theme') === 'dark' ? 'dark' : 'light'; }
+    catch (_e) { /* Default to light when browser storage is unavailable. */ }
+    applyDashboardTheme(savedTheme, false);
+
+    document.addEventListener('keydown', (event) => {
+        if (event.code !== 'Numpad9' || event.repeat || event.isComposing) return;
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const target = event.target;
+        if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')) return;
+        event.preventDefault();
+        applyDashboardTheme(document.body.classList.contains('theme-dark') ? 'light' : 'dark');
+    });
+}
+
 function initPage() {
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
@@ -1861,6 +1893,7 @@ function initPage() {
         return;
     }
     if (document.querySelector('.page-dashboard')) {
+        setupDashboardThemeShortcut();
         initDashboard();
         initEntrance();
     }

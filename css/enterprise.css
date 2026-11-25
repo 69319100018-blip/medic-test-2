@@ -3890,3 +3890,187 @@ body.dashboard-body .page-dashboard .btn-danger:disabled {
 .page-dashboard .member-check > span {
   color: var(--app-text) !important;
 }
+
+
+/* ==========================================================================
+   DASHBOARD DARK MODE — NUMPAD 9
+   ========================================================================== */
+html:has(body.dashboard-body.theme-dark) { color-scheme: dark; background: #0b1422; }
+body.dashboard-body.theme-dark {
+  color-scheme: dark;
+  --app-canvas:#0b1422; --app-surface:#14253a; --app-surface-muted:#192d43;
+  --app-border:#2a425a; --app-border-strong:#3a5671;
+  --app-text:#f1f6fb; --app-text-muted:#c2d0de; --app-text-soft:#aabed0;
+  --app-navy:#d9e8f5; --app-navy-strong:#eff6fc; --app-navy-soft:#b8cee0;
+  --app-primary:#4c9bd1; --app-primary-strong:#78b8e3; --app-primary-soft:#203f5b;
+  --app-teal:#80cbd1; --app-teal-soft:#1b3b48;
+  --app-success:#82d2ad; --app-success-soft:#173d32;
+  --app-warning:#f1c779; --app-warning-soft:#4a3920;
+  --app-danger:#f0a0a7; --app-danger-soft:#48272f;
+  --app-shadow-sm:0 2px 10px rgba(0,0,0,.20);
+  --app-shadow-md:0 14px 34px rgba(0,0,0,.24);
+  --app-shadow-float:0 20px 54px rgba(0,0,0,.34);
+  background:
+    radial-gradient(ellipse at 12% 4%, rgba(68,127,174,.13), transparent 32%),
+    radial-gradient(ellipse at 92% 18%, rgba(52,143,143,.10), transparent 30%),
+    linear-gradient(145deg,#0b1422 0%,#101e2e 54%,#0d1928 100%) !important;
+  color:var(--app-text) !important;
+}
+body.dashboard-body.theme-dark::before {
+  opacity:.18;
+  background-image:linear-gradient(rgba(169,204,230,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(169,204,230,.045) 1px,transparent 1px);
+}
+body.dashboard-body.theme-dark::after {
+  background:radial-gradient(circle,rgba(63,139,171,.14),rgba(63,139,171,0) 68%);
+}
+.theme-dark .page-dashboard > .topbar {
+  border-color:var(--app-border) !important;
+  background:rgba(20,37,58,.96) !important;
+  color:var(--app-text);
+}
+.theme-dark .page-dashboard .brand-text strong,
+.theme-dark .page-dashboard .time-label strong,
+.theme-dark .page-dashboard .panel-header h2,
+.theme-dark .page-dashboard .fund-card h3,
+.theme-dark .page-dashboard .stock-list-title,
+.theme-dark .page-dashboard .member-card-title { color:var(--app-text) !important; }
+.theme-dark .page-dashboard .brand-text small,
+.theme-dark .page-dashboard .time-label span,
+.theme-dark .page-dashboard .profile-header .subtext,
+.theme-dark .page-dashboard .help-text,
+.theme-dark .page-dashboard .history-filter label { color:var(--app-text-muted) !important; }
+.theme-dark .page-dashboard .time-label,
+.theme-dark .page-dashboard .history-highlight,
+.theme-dark .page-dashboard .date-pill {
+  border-color:var(--app-border) !important;
+  background:#1a3047 !important;
+  color:#dce9f4 !important;
+}
+.theme-dark .page-dashboard > .dashboard-nav {
+  border-color:#2b435b !important;
+  background:linear-gradient(180deg,#172c42 0%,#101f30 100%) !important;
+  box-shadow:0 14px 34px rgba(0,0,0,.24);
+}
+.theme-dark .page-dashboard > .dashboard-nav::before { color:#9db5ca; }
+.theme-dark .page-dashboard .nav-link { color:#d6e3ee !important; }
+.theme-dark .page-dashboard .nav-link i { color:#9db9d0 !important; }
+.theme-dark .page-dashboard .nav-link:hover:not(.active) {
+  border-color:#35536e; background:#223b53 !important; color:#fff !important;
+}
+.theme-dark .page-dashboard .nav-link.active {
+  border-color:#426b8c;
+  background:linear-gradient(90deg,#285273,#1f405c) !important;
+  color:#fff !important; box-shadow:inset 3px 0 0 #8fd0df !important;
+}
+.theme-dark .page-dashboard .nav-link.active i { color:#bce8ef !important; }
+.theme-dark .page-dashboard .panel {
+  border-color:var(--app-border) !important;
+  background:#14253a !important; color:var(--app-text) !important;
+  box-shadow:0 8px 26px rgba(0,0,0,.18) !important;
+}
+.theme-dark .page-dashboard .panel-header { border-color:var(--app-border); }
+.theme-dark .page-dashboard .fund-card,
+.theme-dark .page-dashboard .stock-stat,
+.theme-dark .page-dashboard .fund-cum-item,
+.theme-dark .page-dashboard .member-checks,
+.theme-dark .page-dashboard #fundAdminCard {
+  border-color:var(--app-border) !important;
+  background:#192d43 !important; color:var(--app-text) !important;
+}
+.theme-dark .page-dashboard .stock-item,
+.theme-dark .page-dashboard .member-card,
+.theme-dark .page-dashboard .status-card,
+.theme-dark .page-dashboard .forceout-card,
+.theme-dark .page-dashboard .log-item,
+.theme-dark .page-dashboard .fund-history-item,
+.theme-dark .page-dashboard .fund-summary-row,
+.theme-dark .page-dashboard .fund-legend-item,
+.theme-dark .page-dashboard .doctor-card {
+  border-color:#304a64 !important; background:#1b3047 !important; color:#fff !important;
+}
+.theme-dark .page-dashboard .stock-item strong,
+.theme-dark .page-dashboard .stock-item span,
+.theme-dark .page-dashboard .log-item strong,
+.theme-dark .page-dashboard .log-item span,
+.theme-dark .page-dashboard .status-card strong,
+.theme-dark .page-dashboard .status-card span,
+.theme-dark .page-dashboard .forceout-card strong,
+.theme-dark .page-dashboard .forceout-card span,
+.theme-dark .page-dashboard .member-card-title,
+.theme-dark .page-dashboard .member-card-sub,
+.theme-dark .page-dashboard .member-field > span,
+.theme-dark .page-dashboard .stock-item-body > span { color:#fff !important; }
+.theme-dark .page-dashboard .stock-item .stock-missing { color:#ffd88c !important; }
+.theme-dark .page-dashboard .stock-item .stock-ok { color:#93e1ba !important; }
+.theme-dark .page-dashboard .doctors-group-title {
+  border-left-color:#8fc5e8 !important; background:#254660 !important; color:#fff !important;
+}
+.theme-dark .page-dashboard .doctors-group-title span { color:#fff !important; opacity:1 !important; }
+.theme-dark .page-dashboard label:not(.member-check) { color:#d8e5ef !important; }
+.theme-dark .page-dashboard input[type="text"],
+.theme-dark .page-dashboard input[type="number"],
+.theme-dark .page-dashboard input[type="password"],
+.theme-dark .page-dashboard input[type="search"],
+.theme-dark .page-dashboard input[type="email"],
+.theme-dark .page-dashboard select,
+.theme-dark .page-dashboard textarea,
+.theme-dark .page-dashboard .stock-status-select,
+.theme-dark .page-dashboard .member-field input,
+.theme-dark .page-dashboard .member-field select {
+  border-color:#3b5873 !important; background:#0e1d2d !important; color:#f1f6fb !important;
+}
+.theme-dark .page-dashboard input::placeholder,
+.theme-dark .page-dashboard textarea::placeholder { color:#94a9bc !important; opacity:1; }
+.theme-dark .page-dashboard select option { background:#14253a; color:#f1f6fb; }
+.theme-dark .page-dashboard .member-check {
+  border-color:#36536d !important; background:#20364d !important; color:#eef5fb !important;
+}
+.theme-dark .page-dashboard .member-check > span { color:#eef5fb !important; }
+.theme-dark .page-dashboard .member-check:hover { background:#29445e !important; }
+.theme-dark .page-dashboard .member-check:has(input:checked) {
+  border-color:#367a66 !important; background:#1d443b !important;
+}
+.theme-dark .page-dashboard .btn-secondary {
+  border-color:#3a5874 !important; background:#233d56 !important; color:#f0f6fb !important;
+}
+.theme-dark .page-dashboard .btn-secondary:hover:not(:disabled) {
+  border-color:#5b84a8 !important; background:#2c4d6b !important; color:#fff !important;
+}
+.theme-dark .page-dashboard .btn-tertiary {
+  border-color:#315d7e !important; background:#1e405d !important; color:#d9efff !important;
+}
+.theme-dark .page-dashboard .btn-tertiary:hover:not(:disabled) { background:#285474 !important; }
+.theme-dark .page-dashboard .btn-logout {
+  border-color:#74434b !important; background:#39252d !important; color:#ffc6cc !important;
+}
+.theme-dark .page-dashboard .profile-stat {
+  border-color:#285c4a !important; background:#173c32 !important;
+}
+.theme-dark .page-dashboard .profile-stat span { color:#b0d9c7 !important; }
+.theme-dark .page-dashboard .profile-stat strong { color:#a4e2c2 !important; }
+.theme-dark .page-dashboard .fund-bar-track { background:#2a3d51 !important; }
+.theme-dark .page-dashboard .fund-bar-value,
+.theme-dark .page-dashboard .fund-bar-label { color:#d5e3ee !important; }
+.theme-dark .page-dashboard .music-player,
+.theme-dark .page-dashboard .music-playlist-panel {
+  border-color:var(--app-border) !important; background:rgba(19,36,55,.97) !important; color:#f1f6fb !important;
+}
+.theme-dark .page-dashboard .music-player span,
+.theme-dark .page-dashboard .music-playlist-head strong { color:#f1f6fb !important; }
+.theme-dark .page-dashboard .music-player .music-btn,
+.theme-dark .page-dashboard .music-playlist-item {
+  border-color:#36516b; background:#20364d; color:#e6f0f8 !important;
+}
+.theme-dark .page-dashboard .music-playlist-item.active { background:#244d6b !important; color:#fff !important; }
+.theme-dark .page-dashboard .btn-success:disabled,
+.theme-dark .page-dashboard .btn-danger:disabled { opacity:1 !important; }
+.theme-dark .swal2-popup {
+  border:1px solid var(--app-border) !important; background:#172b40 !important; color:#f1f6fb !important;
+}
+.theme-dark .swal2-title,
+.theme-dark .swal2-html-container { color:#f1f6fb !important; }
+.theme-dark .swal2-input,
+.theme-dark .swal2-select,
+.theme-dark .swal2-textarea {
+  border-color:#3b5873 !important; background:#0e1d2d !important; color:#f1f6fb !important;
+}
