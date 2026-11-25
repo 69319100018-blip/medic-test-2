@@ -527,20 +527,22 @@ app.post('/api/shift-checkin', authRequired, async (req, res) => {
     if (!needDb(res)) return;
     const username = req.user.sub;
     const t = thaiNow();
-    const open = await sql`
-      SELECT id FROM shift_logs
-      WHERE username = ${username} AND type = 'เข้าเวร'
-        AND duration IS NULL AND date_th = ${t.date}
-      LIMIT 1
-    `;
-    if (open.length) return res.status(400).json({ error: 'เข้าเวรอยู่แล้ว' });
+
+    // The partial unique index is the final concurrency guard. The NOT EXISTS
+    // clause provides a friendly normal-path response before the insert.
     const inserted = await sql`
       INSERT INTO shift_logs (username, type, datetime, date_th, time_th)
-      VALUES (${username}, 'เข้าเวร', ${t.iso}, ${t.date}, ${t.time})
+      SELECT ${username}, 'เข้าเวร', ${t.iso}, ${t.date}, ${t.time}
+      WHERE NOT EXISTS (
+        SELECT 1 FROM shift_logs
+        WHERE username = ${username} AND type = 'เข้าเวร'
+          AND duration IS NULL AND date_th = ${t.date}
+      )
       RETURNING id, username, type, datetime, date_th AS date, time_th AS time
     `;
+    if (!inserted.length) return res.status(409).json({ error: 'เข้าเวรอยู่แล้ว' });
+
     const profile = await lookupUserProfile(username);
-    // แจ้ง Discord แบบไม่บล็อก response
     notifyDiscordShift({
       type: 'เข้าเวร',
       username,
@@ -549,8 +551,9 @@ app.post('/api/shift-checkin', authRequired, async (req, res) => {
       date: t.date,
       time: t.time
     }).catch(() => {});
-    res.json(inserted[0]);
+    return res.json(inserted[0]);
   } catch (err) {
+    if (err?.code === '23505') return res.status(409).json({ error: 'เข้าเวรอยู่แล้ว' });
     safeError(res, err);
   }
 });
@@ -559,6 +562,13 @@ app.post('/api/shift-checkout', authRequired, async (req, res) => {
   try {
     if (!needDb(res)) return;
     const { isForced = false, username: targetUser } = req.body || {};
+    if (typeof isForced !== 'boolean') {
+      return res.status(400).json({ error: 'isForced ต้องเป็น boolean' });
+    }
+    if (targetUser !== undefined && (typeof targetUser !== 'string' || targetUser.length > 64)) {
+      return res.status(400).json({ error: 'ชื่อผู้ใช้ไม่ถูกต้อง' });
+    }
+
     let username = req.user.sub;
     if (isForced && targetUser && targetUser !== req.user.sub) {
       if (!req.user.canViewMonitoring && !req.user.isAdmin) {
@@ -566,22 +576,47 @@ app.post('/api/shift-checkout', authRequired, async (req, res) => {
       }
       username = targetUser;
     }
+
     const t = thaiNow();
-    const openRows = await sql`
-      SELECT id, datetime FROM shift_logs
-      WHERE username = ${username} AND type = 'เข้าเวร'
-        AND duration IS NULL AND date_th = ${t.date}
-      ORDER BY created_at DESC LIMIT 1
-    `;
-    if (!openRows.length) return res.status(400).json({ error: 'ไม่พบเวรที่ค้างอยู่' });
-    const open = openRows[0];
-    const duration = formatShiftDuration(open.datetime, t.now);
-    await sql`UPDATE shift_logs SET duration = ${duration} WHERE id = ${open.id}`;
+    // Lock the selected open shift, close it, and insert its checkout event
+    // within one statement so concurrent checkout requests cannot duplicate it.
     const inserted = await sql`
-      INSERT INTO shift_logs (username, type, date_th, time_th, duration, is_forced)
-      VALUES (${username}, 'ออกเวร', ${t.date}, ${t.time}, ${duration}, ${!!isForced})
-      RETURNING id, username, type, date_th AS date, time_th AS time, duration, is_forced AS "isForced"
+      WITH candidate AS (
+        SELECT id,
+          GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (${t.iso}::timestamptz - datetime))))::bigint AS total_seconds
+        FROM shift_logs
+        WHERE username = ${username} AND type = 'เข้าเวร'
+          AND duration IS NULL AND date_th = ${t.date}
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE
+      ),
+      updated AS (
+        UPDATE shift_logs AS shift
+        SET duration =
+          CASE WHEN candidate.total_seconds >= 3600
+            THEN (candidate.total_seconds / 3600)::text || ' ชม. '
+            ELSE '' END ||
+          CASE WHEN candidate.total_seconds >= 60
+            THEN ((candidate.total_seconds % 3600) / 60)::text || ' นาที '
+            ELSE '' END ||
+          (candidate.total_seconds % 60)::text || ' วินาที'
+        FROM candidate
+        WHERE shift.id = candidate.id
+        RETURNING shift.username, shift.duration
+      ),
+      checkout_event AS (
+        INSERT INTO shift_logs (username, type, date_th, time_th, duration, is_forced)
+        SELECT username, 'ออกเวร', ${t.date}, ${t.time}, duration, ${isForced}
+        FROM updated
+        RETURNING id, username, type, date_th AS date, time_th AS time,
+                  duration, is_forced AS "isForced"
+      )
+      SELECT * FROM checkout_event
     `;
+
+    if (!inserted.length) return res.status(409).json({ error: 'ไม่พบเวรที่ค้างอยู่' });
+    const result = inserted[0];
     const profile = await lookupUserProfile(username);
     notifyDiscordShift({
       type: 'ออกเวร',
@@ -590,10 +625,10 @@ app.post('/api/shift-checkout', authRequired, async (req, res) => {
       role: profile.role,
       date: t.date,
       time: t.time,
-      duration,
-      isForced: !!isForced
+      duration: result.duration,
+      forced: isForced
     }).catch(() => {});
-    res.json({ ...inserted[0], duration });
+    return res.json(result);
   } catch (err) {
     safeError(res, err);
   }

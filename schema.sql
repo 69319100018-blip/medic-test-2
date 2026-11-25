@@ -6,7 +6,7 @@
 -- ผู้ใช้ระบบ (login)
 CREATE TABLE IF NOT EXISTS users (
     username        TEXT PRIMARY KEY,
-    password_hash   TEXT NOT NULL,          -- เก็บ plain ชั่วคราว (โปรดเปลี่ยนเป็น bcrypt ภายหลัง)
+    password_hash   TEXT NOT NULL,          -- bcrypt password hash; never store plaintext
     display_name    TEXT NOT NULL,
     role            TEXT NOT NULL DEFAULT 'นักเรียนแพทย์',
     avatar          TEXT,
@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS shift_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_shift_logs_username_date ON shift_logs (username, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shift_logs_one_open_per_user_day
+    ON shift_logs (username, date_th)
+    WHERE type = 'เข้าเวร' AND duration IS NULL;
 
 -- เงินกองกลาง (เก็บสถานะล่าสุดเป็นแถวเดียว)
 CREATE TABLE IF NOT EXISTS central_fund (

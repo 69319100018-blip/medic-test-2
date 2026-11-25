@@ -37,6 +37,10 @@ Never commit `.env` or files named `env`.
 ## Vercel
 Configure `DATABASE_URL`, `JWT_SECRET`, and exact `ALLOWED_ORIGINS` in Vercel for each environment. Never use `*`. Complete credential rotation before deploying.
 
+## Existing database migrations
+
+The schema file is the baseline for a new database. For an existing Neon database, review and apply files under `migrations/` individually after taking a backup. In particular, `001-open-shift-uniqueness.sql` requires resolving duplicate open-shift rows before the unique index can be created.
+
 ## Quality checks
 ```bash
 npm ci
