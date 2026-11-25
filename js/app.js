@@ -1691,6 +1691,8 @@ function handleMenuSwitch(event) {
 
     setDashboardPanelActive(target);
 
+    if (target === 'leaveRequestsSection') loadLeaveRequests();
+
     // Shared data is hydrated during dashboard startup. Do not refetch it
     // every time a user opens the stock history panel.
     if (target === 'intelSection' && typeof setupIntelAdmin === 'function') {
@@ -1780,6 +1782,7 @@ async function initDashboard() {
     }
 
     renderProfile();
+    initLeaveRequests();
     renderHistoryControls();
     renderLog();
     renderTeamStatus();
@@ -1852,6 +1855,266 @@ function handleLogin(e) {
 }
 
 
+
+/* ==========================================================================
+   LEAVE REQUESTS — self-service requests and deputy-level approvals
+   ========================================================================== */
+const leaveUiState = {
+    canApprove: false,
+    requests: [],
+    filter: 'pending',
+    loading: false
+};
+
+function leaveCanApprove(username) {
+    const profile = userProfiles[username];
+    if (profile?.isAdmin === true) return true;
+    const role = String(profile?.role || '').toLowerCase().replace(/[\\s.]/g, '');
+    return role.startsWith('รองผู้อำนวยการ') ||
+        role.startsWith('ผู้อำนวยการ') ||
+        role.startsWith('รองผอ') ||
+        role.startsWith('ผอ');
+}
+
+function leaveDateLabel(value) {
+    if (!value) return '-';
+    return new Intl.DateTimeFormat('th-TH', {
+        day: 'numeric', month: 'short', year: 'numeric'
+    }).format(new Date(`${value}T00:00:00`));
+}
+
+function leaveDateRange(request) {
+    if (request.startDate === request.endDate) return leaveDateLabel(request.startDate);
+    return `${leaveDateLabel(request.startDate)} – ${leaveDateLabel(request.endDate)}`;
+}
+
+function leaveStatusInfo(status) {
+    const statuses = {
+        pending: { label: 'รออนุมัติ', className: 'pending', icon: 'hourglass-split' },
+        approved: { label: 'อนุมัติแล้ว', className: 'approved', icon: 'check-circle-fill' },
+        rejected: { label: 'ไม่อนุมัติ', className: 'rejected', icon: 'x-circle-fill' }
+    };
+    return statuses[status] || statuses.pending;
+}
+
+function renderLeaveSummary() {
+    const counts = {
+        total: leaveUiState.requests.length,
+        pending: leaveUiState.requests.filter((item) => item.status === 'pending').length,
+        approved: leaveUiState.requests.filter((item) => item.status === 'approved').length,
+        rejected: leaveUiState.requests.filter((item) => item.status === 'rejected').length
+    };
+    Object.entries({
+        leaveCountTotal: counts.total,
+        leaveCountPending: counts.pending,
+        leaveCountApproved: counts.approved,
+        leaveCountRejected: counts.rejected
+    }).forEach(([id, value]) => {
+        const node = document.getElementById(id);
+        if (node) node.textContent = String(value);
+    });
+}
+
+function renderLeaveRequests() {
+    const list = document.getElementById('leaveRequestList');
+    const filterRow = document.getElementById('leaveFilterRow');
+    const eyebrow = document.getElementById('leaveListEyebrow');
+    const title = document.getElementById('leaveListTitle');
+    const count = document.getElementById('leaveVisibleCount');
+    const subtitle = document.getElementById('leavePageSubtitle');
+    if (!list) return;
+
+    if (filterRow) filterRow.classList.toggle('hidden', !leaveUiState.canApprove);
+    if (eyebrow) eyebrow.textContent = leaveUiState.canApprove ? 'TEAM LEAVE REQUESTS' : 'MY LEAVE REQUESTS';
+    if (title) title.textContent = leaveUiState.canApprove ? 'คำขอจากสมาชิกทั้งหมด' : 'ประวัติคำขอของฉัน';
+    if (subtitle) subtitle.textContent = leaveUiState.canApprove
+        ? 'ตรวจสอบและพิจารณาคำขอลาของสมาชิกในทีม'
+        : 'ส่งคำขอลาและติดตามผลการพิจารณาของคุณ';
+
+    document.querySelectorAll('[data-leave-filter]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.leaveFilter === leaveUiState.filter);
+        button.setAttribute('aria-pressed', button.dataset.leaveFilter === leaveUiState.filter ? 'true' : 'false');
+    });
+
+    const requests = leaveUiState.canApprove && leaveUiState.filter !== 'all'
+        ? leaveUiState.requests.filter((item) => item.status === leaveUiState.filter)
+        : leaveUiState.requests;
+    if (count) count.textContent = `${requests.length} รายการ`;
+
+    if (!requests.length) {
+        const message = leaveUiState.canApprove && leaveUiState.filter === 'pending'
+            ? 'ไม่มีคำขอที่รอการอนุมัติ'
+            : 'ยังไม่มีคำขอลาในรายการนี้';
+        list.innerHTML = `
+            <div class="leave-empty-state">
+                <i class="bi bi-inbox"></i>
+                <strong>${message}</strong>
+                <span>${leaveUiState.canApprove ? 'เมื่อมีสมาชิกส่งคำขอ รายการจะปรากฏที่นี่' : 'คำขอที่คุณส่งจะปรากฏที่นี่'}</span>
+            </div>`;
+        return;
+    }
+
+    list.innerHTML = requests.map((request) => {
+        const status = leaveStatusInfo(request.status);
+        const requester = leaveUiState.canApprove
+            ? `<div class="leave-requester"><strong>${escapeHtml(request.requesterName || request.username)}</strong><span>${escapeHtml(request.requesterRole || 'ไม่ระบุตำแหน่ง')}</span></div>`
+            : '';
+        const note = request.reviewNote
+            ? `<div class="leave-review-note ${request.status}"><strong>${request.status === 'rejected' ? 'เหตุผลที่ไม่อนุมัติ' : 'หมายเหตุผู้พิจารณา'}</strong><span>${escapeHtml(request.reviewNote)}</span></div>`
+            : '';
+        const reviewer = request.reviewedByName
+            ? `<span class="leave-reviewed-by">พิจารณาโดย ${escapeHtml(request.reviewedByName)}</span>`
+            : '';
+        const actions = leaveUiState.canApprove && request.status === 'pending'
+            ? `<div class="leave-request-actions">
+                   <button type="button" class="leave-action-btn approve" data-leave-approve="${escapeHtml(request.id)}"><i class="bi bi-check2"></i> อนุมัติ</button>
+                   <button type="button" class="leave-action-btn reject" data-leave-reject="${escapeHtml(request.id)}"><i class="bi bi-x-lg"></i> ไม่อนุมัติ</button>
+               </div>`
+            : '';
+        const createdAt = request.createdAt
+            ? new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(request.createdAt))
+            : '';
+        return `
+            <article class="leave-request-item">
+                <div class="leave-request-top">
+                    <div class="leave-type-and-date">
+                        <span class="leave-type-chip">${escapeHtml(request.leaveType)}</span>
+                        <span class="leave-date-range"><i class="bi bi-calendar3"></i> ${leaveDateRange(request)}</span>
+                    </div>
+                    <span class="leave-status-badge ${status.className}"><i class="bi bi-${status.icon}"></i> ${status.label}</span>
+                </div>
+                ${requester}
+                <div class="leave-reason"><strong>เหตุผลการลา</strong><p>${escapeHtml(request.reason)}</p></div>
+                ${note}
+                <div class="leave-request-footer">
+                    <span>${createdAt ? `ส่งคำขอเมื่อ ${createdAt}` : ''}</span>
+                    ${reviewer}
+                </div>
+                ${actions}
+            </article>`;
+    }).join('');
+}
+
+async function loadLeaveRequests() {
+    if (leaveUiState.loading) return;
+    const list = document.getElementById('leaveRequestList');
+    leaveUiState.loading = true;
+    if (list) list.innerHTML = '<div class="leave-loading"><span class="leave-spinner"></span> กำลังโหลดคำขอ...</div>';
+    try {
+        const requests = await apiLoadLeaveRequests();
+        leaveUiState.requests = Array.isArray(requests) ? requests : [];
+        if (!leaveUiState.canApprove) leaveUiState.filter = 'all';
+        renderLeaveSummary();
+        renderLeaveRequests();
+    } catch (err) {
+        if (list) list.innerHTML = `<div class="leave-empty-state error"><i class="bi bi-cloud-slash"></i><strong>โหลดคำขอไม่สำเร็จ</strong><span>${escapeHtml(err.message || 'กรุณาลองใหม่อีกครั้ง')}</span><button type="button" class="leave-retry-btn" id="btnLeaveRetry"><i class="bi bi-arrow-clockwise"></i> ลองอีกครั้ง</button></div>`;
+    } finally {
+        leaveUiState.loading = false;
+    }
+}
+
+async function submitLeaveRequest(event) {
+    event.preventDefault();
+    const form = document.getElementById('leaveRequestForm');
+    if (!form?.reportValidity()) return;
+    const payload = {
+        leaveType: document.getElementById('leaveType').value,
+        startDate: document.getElementById('leaveStartDate').value,
+        endDate: document.getElementById('leaveEndDate').value,
+        reason: document.getElementById('leaveReason').value.trim()
+    };
+    if (payload.endDate < payload.startDate) {
+        showAlert('วันที่ไม่ถูกต้อง', 'วันสิ้นสุดต้องไม่ก่อนวันเริ่มลา', 'warning');
+        return;
+    }
+
+    const button = document.getElementById('btnLeaveSubmit');
+    if (button) button.disabled = true;
+    try {
+        await apiCreateLeaveRequest(payload);
+        form.reset();
+        showAlert('ส่งคำขอลาแล้ว', 'คำขอของคุณถูกส่งเพื่อรอการพิจารณา', 'success');
+        await loadLeaveRequests();
+    } catch (err) {
+        showAlert('ส่งคำขอไม่สำเร็จ', err.message || 'กรุณาลองใหม่อีกครั้ง', 'error');
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+async function decideLeaveRequest(id, status) {
+    if (!leaveUiState.canApprove) return;
+    const request = leaveUiState.requests.find((item) => String(item.id) === String(id));
+    if (!request || request.status !== 'pending') return;
+
+    let reviewNote = '';
+    if (window.Swal) {
+        const result = await Swal.fire({
+            title: status === 'approved' ? 'ยืนยันอนุมัติคำขอลา?' : 'ไม่อนุมัติคำขอลา',
+            text: `${request.requesterName || request.username} · ${request.leaveType} · ${leaveDateRange(request)}`,
+            icon: status === 'approved' ? 'question' : 'warning',
+            input: status === 'rejected' ? 'textarea' : undefined,
+            inputLabel: status === 'rejected' ? 'เหตุผลที่ไม่อนุมัติ' : undefined,
+            inputPlaceholder: status === 'rejected' ? 'ระบุเหตุผลให้ผู้ยื่นคำขอทราบ' : undefined,
+            inputValidator: status === 'rejected' ? (value) => !String(value || '').trim() || String(value).trim().length < 3
+                ? 'กรุณาระบุเหตุผลอย่างน้อย 3 ตัวอักษร' : undefined : undefined,
+            showCancelButton: true,
+            confirmButtonText: status === 'approved' ? 'อนุมัติ' : 'ยืนยันไม่อนุมัติ',
+            cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: status === 'approved' ? '#187653' : '#a83f4a',
+            reverseButtons: true
+        });
+        if (!result.isConfirmed) return;
+        reviewNote = status === 'rejected' ? String(result.value || '').trim() : '';
+    } else {
+        if (!window.confirm(status === 'approved' ? 'ยืนยันอนุมัติคำขอลานี้?' : 'ยืนยันไม่อนุมัติคำขอลานี้?')) return;
+        if (status === 'rejected') {
+            reviewNote = String(window.prompt('ระบุเหตุผลที่ไม่อนุมัติ') || '').trim();
+            if (reviewNote.length < 3) return;
+        }
+    }
+
+    try {
+        await apiDecideLeaveRequest({ id, status, reviewNote });
+        showAlert(status === 'approved' ? 'อนุมัติคำขอแล้ว' : 'ไม่อนุมัติคำขอแล้ว', request.requesterName || request.username, 'success');
+        await loadLeaveRequests();
+    } catch (err) {
+        showAlert('บันทึกผลการพิจารณาไม่สำเร็จ', err.message || 'กรุณาลองใหม่อีกครั้ง', 'error');
+    }
+}
+
+function initLeaveRequests() {
+    const form = document.getElementById('leaveRequestForm');
+    const list = document.getElementById('leaveRequestList');
+    const start = document.getElementById('leaveStartDate');
+    const end = document.getElementById('leaveEndDate');
+    if (!form || !list || window.__leaveRequestsInitialized) return;
+    window.__leaveRequestsInitialized = true;
+    leaveUiState.canApprove = leaveCanApprove(currentUser);
+    leaveUiState.filter = leaveUiState.canApprove ? 'pending' : 'all';
+    document.getElementById('leaveFilterRow')?.classList.toggle('hidden', !leaveUiState.canApprove);
+    form.addEventListener('submit', submitLeaveRequest);
+    start?.addEventListener('change', () => {
+        if (start.value) {
+            end.min = start.value;
+            if (end.value && end.value < start.value) end.value = start.value;
+        }
+    });
+    document.getElementById('btnLeaveRefresh')?.addEventListener('click', loadLeaveRequests);
+    document.getElementById('leaveFilterRow')?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-leave-filter]');
+        if (!button || !leaveUiState.canApprove) return;
+        leaveUiState.filter = button.dataset.leaveFilter;
+        renderLeaveRequests();
+    });
+    list.addEventListener('click', async (event) => {
+        const approve = event.target.closest('[data-leave-approve]');
+        if (approve) return decideLeaveRequest(approve.dataset.leaveApprove, 'approved');
+        const reject = event.target.closest('[data-leave-reject]');
+        if (reject) return decideLeaveRequest(reject.dataset.leaveReject, 'rejected');
+        if (event.target.closest('#btnLeaveRetry')) return loadLeaveRequests();
+    });
+}
 
 /* ==========================================================================
    SHARED CALENDAR — events visible to all signed-in users.

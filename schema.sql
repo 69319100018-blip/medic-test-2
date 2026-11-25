@@ -133,6 +133,29 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 CREATE INDEX IF NOT EXISTS idx_calendar_events_date_time
     ON calendar_events (event_date, start_time, id);
 
+-- คำขอลาและผลการพิจารณา (สมาชิกส่งได้; รองผอ.ขึ้นไปอนุมัติได้)
+CREATE TABLE IF NOT EXISTS leave_requests (
+    id              BIGSERIAL PRIMARY KEY,
+    username        TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+    leave_type      VARCHAR(40) NOT NULL CHECK (leave_type IN ('ลาป่วย', 'ลากิจ', 'ลาพักผ่อน', 'อื่นๆ')),
+    start_date      DATE NOT NULL,
+    end_date        DATE NOT NULL,
+    reason          VARCHAR(1000) NOT NULL,
+    status          VARCHAR(16) NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'approved', 'rejected')),
+    review_note     TEXT,
+    reviewed_by     TEXT REFERENCES users(username) ON DELETE SET NULL,
+    reviewed_at     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT leave_requests_date_range_check CHECK (end_date >= start_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_leave_requests_user_created
+    ON leave_requests (username, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_leave_requests_status_created
+    ON leave_requests (status, created_at DESC);
+
 -- ข้อมูลเริ่มต้น
 INSERT INTO central_fund (id, balance, cash, deposit, reserve)
 VALUES (1, 70000, 40000, 20000, 10000)

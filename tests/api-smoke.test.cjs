@@ -144,3 +144,41 @@ test('calendar API requires authentication and guards all write routes', async (
   assert.match(source, /app\.patch\('\/api\/calendar-event', authRequired, calendarManagerRequired/);
   assert.match(source, /app\.delete\('\/api\/calendar-event', authRequired, calendarManagerRequired/);
 });
+
+
+test('leave approval permissions start at deputy director and above', () => {
+  const { canApproveLeave } = require('../api/leave-permissions');
+  assert.equal(canApproveLeave({ role: 'รองผู้อำนวยการแพทย์' }), true);
+  assert.equal(canApproveLeave({ role: 'ผู้อำนวยการแพทย์' }), true);
+  assert.equal(canApproveLeave({ role: 'รอง.ผู้อำนวยการ' }), true);
+  assert.equal(canApproveLeave({ role: 'ผอ.แพทย์' }), true);
+  assert.equal(canApproveLeave({ role: 'แอดมินแพทย์', isAdmin: true }), true);
+  assert.equal(canApproveLeave({ role: 'แพทย์' }), false);
+  assert.equal(canApproveLeave({ role: 'นักเรียนแพทย์' }), false);
+  assert.equal(canApproveLeave({ role: 'ผู้ช่วยผู้อำนวยการ' }), false);
+});
+
+test('leave request routes require authentication and protect approval actions', async () => {
+  const read = await fetch(`${apiUrl}/api/leave-requests`);
+  const create = await fetch(`${apiUrl}/api/leave-requests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ leaveType: 'ลากิจ', startDate: '2026-11-26', endDate: '2026-11-26', reason: 'ธุระส่วนตัว' })
+  });
+  const decide = await fetch(`${apiUrl}/api/leave-request`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: '1', status: 'approved' })
+  });
+  assert.equal(read.status, 401);
+  assert.equal(create.status, 401);
+  assert.equal(decide.status, 401);
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  assert.match(source, /app\.get\('\/api\/leave-requests', authRequired/);
+  assert.match(source, /app\.post\('\/api\/leave-requests', authRequired/);
+  assert.match(source, /app\.patch\('\/api\/leave-request', authRequired, leaveApproverRequired/);
+  assert.match(source, /status = 'pending'/);
+  assert.match(source, /เหตุผลที่ไม่อนุมัติอย่างน้อย 3 ตัวอักษร/);
+});

@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/enterprise.css?v=20261125-calendar-v1">
+    <link rel="stylesheet" href="css/enterprise.css?v=20261125-leave-v1">
 </head>
 <body class="dashboard-body">
     <div class="bg-blob blob-1"></div>
@@ -134,6 +134,9 @@
             <button class="nav-link" data-target="historySection" aria-label="ประวัติ">
                 <i class="bi bi-clock-history"></i> ประวัติ
             </button>
+            <button class="nav-link" data-target="leaveRequestsSection" aria-label="คำขออนุมัติลา">
+                <i class="bi bi-calendar2-minus"></i> คำขออนุมัติลา
+            </button>
             <button class="nav-link" data-target="stockHistorySection" aria-label="ประวัติการเบิก">
                 <i class="bi bi-clipboard2-data"></i> ประวัติการเบิก
             </button>
@@ -227,6 +230,95 @@
                     <button id="btnRules" class="btn btn-tertiary">
                         <i class="bi bi-journal-text"></i> เว็บกฎ
                     </button>
+                </div>
+            </section>
+
+            <section class="panel leave-panel hidden" id="leaveRequestsSection">
+                <div class="panel-header">
+                    <div>
+                        <p class="label">LEAVE MANAGEMENT</p>
+                        <h2>คำขออนุมัติลา</h2>
+                        <p class="leave-page-subtitle" id="leavePageSubtitle">ส่งคำขอลาและติดตามผลการพิจารณา</p>
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="btnLeaveRefresh">
+                        <i class="bi bi-arrow-clockwise"></i> รีเฟรช
+                    </button>
+                </div>
+
+                <div class="leave-summary-grid" id="leaveSummaryGrid">
+                    <div class="leave-summary-card">
+                        <span>คำขอทั้งหมด</span><strong id="leaveCountTotal">0</strong>
+                        <i class="bi bi-inbox"></i>
+                    </div>
+                    <div class="leave-summary-card pending">
+                        <span>รออนุมัติ</span><strong id="leaveCountPending">0</strong>
+                        <i class="bi bi-hourglass-split"></i>
+                    </div>
+                    <div class="leave-summary-card approved">
+                        <span>อนุมัติแล้ว</span><strong id="leaveCountApproved">0</strong>
+                        <i class="bi bi-check-circle"></i>
+                    </div>
+                    <div class="leave-summary-card rejected">
+                        <span>ไม่อนุมัติ</span><strong id="leaveCountRejected">0</strong>
+                        <i class="bi bi-x-circle"></i>
+                    </div>
+                </div>
+
+                <div class="leave-workspace">
+                    <section class="leave-form-card">
+                        <div class="leave-card-heading">
+                            <span class="leave-heading-icon"><i class="bi bi-file-earmark-plus"></i></span>
+                            <div>
+                                <h3>ส่งคำขอลา</h3>
+                                <p>กรอกข้อมูลให้ครบถ้วนก่อนส่งคำขอ</p>
+                            </div>
+                        </div>
+                        <form id="leaveRequestForm" class="leave-request-form">
+                            <label class="leave-field">ประเภทการลา <span>*</span>
+                                <select id="leaveType" required>
+                                    <option value="">เลือกประเภทการลา</option>
+                                    <option value="ลาป่วย">ลาป่วย</option>
+                                    <option value="ลากิจ">ลากิจ</option>
+                                    <option value="ลาพักผ่อน">ลาพักผ่อน</option>
+                                    <option value="อื่นๆ">อื่นๆ</option>
+                                </select>
+                            </label>
+                            <div class="leave-date-fields">
+                                <label class="leave-field">วันเริ่มลา <span>*</span>
+                                    <input id="leaveStartDate" type="date" required>
+                                </label>
+                                <label class="leave-field">วันสิ้นสุด <span>*</span>
+                                    <input id="leaveEndDate" type="date" required>
+                                </label>
+                            </div>
+                            <label class="leave-field">เหตุผลการลา <span>*</span>
+                                <textarea id="leaveReason" rows="4" maxlength="1000" minlength="3" placeholder="ระบุเหตุผลหรือรายละเอียดประกอบการลา" required></textarea>
+                            </label>
+                            <p class="leave-form-hint"><i class="bi bi-info-circle"></i> คำขอจะมีสถานะรออนุมัติจนกว่าผู้มีสิทธิ์จะพิจารณา</p>
+                            <button type="submit" class="leave-submit-btn" id="btnLeaveSubmit">
+                                <i class="bi bi-send"></i> ส่งคำขอลา
+                            </button>
+                        </form>
+                    </section>
+
+                    <section class="leave-list-card">
+                        <div class="leave-list-heading">
+                            <div>
+                                <span class="leave-section-eyebrow" id="leaveListEyebrow">MY LEAVE REQUESTS</span>
+                                <h3 id="leaveListTitle">ประวัติคำขอของฉัน</h3>
+                            </div>
+                            <span class="leave-visible-count" id="leaveVisibleCount">0 รายการ</span>
+                        </div>
+                        <div class="leave-filter-row hidden" id="leaveFilterRow" role="group" aria-label="กรองสถานะคำขอ">
+                            <button type="button" class="leave-filter-btn" data-leave-filter="pending">รออนุมัติ</button>
+                            <button type="button" class="leave-filter-btn" data-leave-filter="all">ทั้งหมด</button>
+                            <button type="button" class="leave-filter-btn" data-leave-filter="approved">อนุมัติแล้ว</button>
+                            <button type="button" class="leave-filter-btn" data-leave-filter="rejected">ไม่อนุมัติ</button>
+                        </div>
+                        <div class="leave-request-list" id="leaveRequestList">
+                            <div class="leave-loading"><span class="leave-spinner"></span> กำลังโหลดคำขอ...</div>
+                        </div>
+                    </section>
                 </div>
             </section>
 
