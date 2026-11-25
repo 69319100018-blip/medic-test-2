@@ -11,11 +11,11 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const app = require('../api/index.js');
 const publicRoot = path.resolve(__dirname, '..');
-const PORT = Number(process.env.PORT) || 3000;
+const defaultPort = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 // The API routes are registered by api/index.js before this middleware.
-// Only unmatched paths reach this guard, which prevents source/config files
-// from being exposed through the local static host.
+// Only unmatched paths reach this guard; source and configuration directories
+// are never exposed through the local static host.
 app.use((req, res, next) => {
   const pathname = req.path.toLowerCase();
 
@@ -59,12 +59,23 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`Medic Shift Log local server listening on http://localhost:${PORT}`);
-});
-
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => {
-    server.close(() => process.exit(0));
-  });
+function createLocalServer({ port = defaultPort, host } = {}) {
+  return host ? app.listen(port, host) : app.listen(port);
 }
+
+if (require.main === module) {
+  const server = createLocalServer();
+  server.on('listening', () => {
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : defaultPort;
+    console.log(`Medic Shift Log local server listening on http://localhost:${port}`);
+  });
+
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, () => {
+      server.close(() => process.exit(0));
+    });
+  }
+}
+
+module.exports = { app, createLocalServer };
