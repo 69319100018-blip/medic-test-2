@@ -3799,3 +3799,94 @@ body.dashboard-body .page-dashboard .btn-danger:disabled {
   color: #5b7186;
   opacity: 1;
 }
+
+
+/* ==========================================================================
+   WHITE TEXT ON MUTED DASHBOARD CARDS
+   Keep the existing muted card surfaces; make every secondary label readable.
+   ========================================================================== */
+.page-dashboard .log-item,
+.page-dashboard .stock-item,
+.page-dashboard .status-card,
+.page-dashboard .forceout-card {
+  color: #fff !important;
+}
+
+.page-dashboard .log-item strong,
+.page-dashboard .log-item span,
+.page-dashboard .stock-item strong,
+.page-dashboard .stock-item span:not(.badge),
+.page-dashboard .stock-item-body > span,
+.page-dashboard .stock-status-control,
+.page-dashboard .status-card strong,
+.page-dashboard .status-card span:not(.badge),
+.page-dashboard .forceout-card strong,
+.page-dashboard .forceout-card span:not(.badge),
+.page-dashboard .member-card-title,
+.page-dashboard .member-card-sub,
+.page-dashboard .member-field > span {
+  color: #fff !important;
+}
+
+/* Status chips use deeper fills so white text remains legible. */
+.page-dashboard .badge.in,
+.page-dashboard .badge.stock-ok {
+  border-color: #176b4e !important;
+  background: #187653 !important;
+  color: #fff !important;
+}
+
+.page-dashboard .badge.out,
+.page-dashboard .badge.stock-out {
+  border-color: #983642 !important;
+  background: #a83f4a !important;
+  color: #fff !important;
+}
+
+.page-dashboard .badge.stock-low {
+  border-color: #8a5a08 !important;
+  background: #93600e !important;
+  color: #fff !important;
+}
+
+.page-dashboard .badge.stock-ordered {
+  border-color: #205e93 !important;
+  background: #286b9f !important;
+  color: #fff !important;
+}
+
+.page-dashboard .badge.stock-waiting {
+  border-color: #653b95 !important;
+  background: #7045a0 !important;
+  color: #fff !important;
+}
+
+.page-dashboard .badge.stock-damaged {
+  border-color: #943b45 !important;
+  background: #a33c42 !important;
+  color: #fff !important;
+}
+
+/* Member role labels and group headings are also shown on muted surfaces. */
+.page-dashboard .member-card-badge {
+  border-color: #286b9f !important;
+  background: #286b9f !important;
+  color: #fff !important;
+}
+
+.page-dashboard .doctors-group-title {
+  border-left-color: #8fc5e8 !important;
+  background: #315a79 !important;
+  color: #fff !important;
+}
+
+.page-dashboard .doctors-group-title span {
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
+/* Permission check rows stay dark-text on their own white controls. */
+.page-dashboard .member-check,
+.page-dashboard .member-check > span {
+  color: var(--app-text) !important;
+}
