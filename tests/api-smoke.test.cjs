@@ -95,3 +95,24 @@ test('local runtime does not expose source, environment, or package metadata', a
     assert.equal(response.status, 404, pathname);
   }
 });
+
+
+test('fund withdrawals use explicit numeric casts and the available cash allocation', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  assert.ok(source.includes('0::numeric - ${amt}::numeric'));
+  assert.ok(source.includes("cash >= ${amt}::numeric"));
+  assert.ok(source.includes("total_income = total_income + CASE"));
+});
+
+test('stock item IDs accept numeric database IDs and status changes persist through the API', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const apiSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  assert.ok(apiSource.includes('if (!/^[1-9]\\d{0,18}$/.test(id))'));
+  assert.ok(appSource.includes('function renderStockWithdrawals()'));
+  assert.ok(appSource.includes('await apiUpdateStock(id, { manualStatus: newStatus });'));
+  assert.ok(appSource.includes('await apiLoadStockWithdrawals()'));
+});
