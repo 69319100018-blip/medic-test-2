@@ -792,8 +792,18 @@
     }
 
     async function refresh() {
-      list.innerHTML = '<div class="log-item"><strong>กำลังโหลดเซสชัน...</strong></div>';
+      const showSkeleton = !list.dataset.hasContent;
+      if (showSkeleton) {
+        list.setAttribute('aria-busy', 'true');
+        list.innerHTML = Array.from({ length: 3 }, () => `
+          <div class="intel-skeleton-card" aria-hidden="true">
+            <span class="skeleton-line is-medium"></span>
+            <span class="skeleton-line is-long"></span>
+            <span class="skeleton-block"></span>
+          </div>`).join('');
+      }
       if (summary) summary.textContent = 'กำลังโหลด...';
+      if (btn) btn.disabled = true;
       try {
         if (typeof apiLoadSecurityIntel !== 'function') {
           list.innerHTML = '<div class="log-item"><strong>API ยังไม่พร้อม</strong></div>';
@@ -819,6 +829,7 @@
         }
         if (!items.length) {
           list.innerHTML = '<div class="log-item"><strong>ยังไม่มีเซสชัน</strong><span>เมื่อมีคนล็อกอิน ระบบจะเก็บ IP ไว้ให้เลือก</span></div>';
+          list.dataset.hasContent = '1';
           return;
         }
         list.innerHTML = items.map((s) => {
@@ -847,9 +858,14 @@
             doLookup();
           });
         });
+        list.dataset.hasContent = '1';
       } catch (e) {
         list.innerHTML = `<div class="log-item"><strong>โหลดไม่สำเร็จ</strong><span>${(e.message || '').replace(/</g, '&lt;')}</span></div>`;
         if (summary) summary.textContent = 'error';
+        delete list.dataset.hasContent;
+      } finally {
+        list.removeAttribute('aria-busy');
+        if (btn) btn.disabled = false;
       }
     }
 
