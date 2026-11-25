@@ -3730,6 +3730,11 @@ body.dashboard-body .page-dashboard .btn-danger:disabled {
   ) !important;
 }
 
+.login-body .login-page {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
 .login-body .login-brand .status-pill {
   color: #edf6fb;
 }

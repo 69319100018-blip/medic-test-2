@@ -200,7 +200,7 @@ function refreshShiftViews() {
 const loginVideoPlaylist = [
     'assets/videos/bg1-h264.mp4',
     'assets/videos/bg3-h264.mp4',
-    'assets/videos/bg2.mp4'  // ยังเป็น HEVC — เบราว์เซอร์ที่รองรับจะเล่นได้
+    'assets/videos/bg3.mp4'  // ใช้คลิปที่มีอยู่จริงใน repo สำหรับรายการที่ 3
 ];
 
 function formatElapsed(seconds) {
