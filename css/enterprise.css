@@ -3680,3 +3680,117 @@ body.dashboard-body .page-dashboard .btn-danger:disabled {
     animation: none !important;
   }
 }
+
+
+/* ==========================================================================
+   ACCESSIBILITY + LOGIN VIDEO FIX
+   Keep the soft-blue UI, strengthen text contrast, and show the bundled video.
+   ========================================================================== */
+:root {
+  --app-text: #17324d;
+  --app-text-muted: #405870;
+  --app-text-soft: #49627a;
+}
+
+/* The video and poster are intentionally hidden by the legacy theme above.
+   Re-enable them and let the login canvas stay translucent. */
+.login-body .login-bg-image,
+.login-body .login-bg-video {
+  display: block !important;
+  visibility: visible !important;
+}
+
+.login-body .login-bg-image {
+  z-index: 0;
+}
+
+.login-body .login-bg-video {
+  z-index: 0;
+  filter: brightness(.78) saturate(.96) contrast(1.04);
+}
+
+.login-body .login-overlay {
+  display: block !important;
+  position: fixed;
+  z-index: 1;
+  background: linear-gradient(
+    115deg,
+    rgba(16, 39, 60, .16) 0%,
+    rgba(19, 48, 72, .08) 52%,
+    rgba(16, 39, 60, .14) 100%
+  );
+  opacity: 1 !important;
+}
+
+.login-body .login-page {
+  background: linear-gradient(
+    135deg,
+    rgba(242, 248, 253, .54) 0%,
+    rgba(231, 242, 251, .46) 100%
+  ) !important;
+}
+
+.login-body .login-brand .status-pill {
+  color: #edf6fb;
+}
+
+.login-body .login-brand .tagline {
+  color: #e0edf6;
+}
+
+.login-body .login-brand .desc {
+  color: #e0ebf4;
+}
+
+.login-body .feature-chips span {
+  color: #e8f1f7;
+}
+
+.login-body .form-label {
+  color: #304960;
+}
+
+.login-body .input-wrap .form-control::placeholder {
+  color: #5b7186;
+  opacity: 1;
+}
+
+.login-body .field-icon {
+  color: #60778e;
+}
+
+.login-body .card-footer-note {
+  color: #405870;
+}
+
+.login-body .page-footer {
+  color: #4f667d;
+}
+
+/* Slightly deeper secondary text across the light dashboard surfaces. */
+.page-dashboard .nav-link i {
+  color: #42627e;
+}
+
+.page-dashboard .nav-link.active i {
+  color: #216da5;
+}
+
+.page-dashboard .time-label span,
+.page-dashboard .profile-header .label,
+.page-dashboard .profile-header .subtext,
+.page-dashboard .help-text,
+.page-dashboard .member-field > span,
+.page-dashboard .stock-status-control {
+  color: #405870;
+}
+
+.page-dashboard label:not(.member-check) {
+  color: #3b5269;
+}
+
+.page-dashboard input::placeholder,
+.page-dashboard textarea::placeholder {
+  color: #5b7186;
+  opacity: 1;
+}
