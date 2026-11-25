@@ -1852,25 +1852,20 @@ function handleLogin(e) {
 
 
 /* DASHBOARD NUMPAD 9 THEME TOGGLE */
-function applyDashboardTheme(theme, persist = true) {
+function applyDashboardTheme(theme) {
     const body = document.body;
     if (!body?.classList.contains('dashboard-body')) return;
     const isDark = theme === 'dark';
     body.classList.toggle('theme-dark', isDark);
     document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
-    if (persist) {
-        try { localStorage.setItem('medic_dashboard_theme', isDark ? 'dark' : 'light'); }
-        catch (_e) { /* Theme remains active for this page if storage is blocked. */ }
-    }
 }
 
 function setupDashboardThemeShortcut() {
     if (!document.body?.classList.contains('dashboard-body') || window.__dashboardThemeShortcutBound) return;
     window.__dashboardThemeShortcutBound = true;
-    let savedTheme = 'light';
-    try { savedTheme = localStorage.getItem('medic_dashboard_theme') === 'dark' ? 'dark' : 'light'; }
-    catch (_e) { /* Default to light when browser storage is unavailable. */ }
-    applyDashboardTheme(savedTheme, false);
+
+    // Every dashboard visit starts in dark mode, regardless of the previous session.
+    applyDashboardTheme('dark');
 
     document.addEventListener('keydown', (event) => {
         if (event.code !== 'Numpad9' || event.repeat || event.isComposing) return;
