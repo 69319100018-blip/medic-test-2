@@ -185,13 +185,6 @@
         if (typeof showAlert === 'function') showAlert('ประเภทรายการไม่ถูกต้อง', 'กรุณาเลือกฝากหรือถอนเงิน', 'warning');
         return;
       }
-      const availableCash = Number(centralFund?.allocations?.cash) || 0;
-      if (type === 'withdraw' && amount > availableCash) {
-        if (typeof showAlert === 'function') {
-          showAlert('เงินสดไม่เพียงพอ', `เงินสดคงเหลือ ${availableCash.toLocaleString('th-TH')} บาท`, 'error');
-        }
-        return;
-      }
       const btn = document.getElementById(type === 'deposit' ? 'btnFundDeposit' : 'btnFundWithdraw');
       if (btn) btn.disabled = true;
       try {
