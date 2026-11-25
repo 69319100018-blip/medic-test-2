@@ -31,6 +31,9 @@ const STOCK_WITHDRAWALS_LOCAL_KEY = 'medicStockWithdrawals';
 const VEHICLE_LOCAL_KEY = 'medicVehicles';
 const DOCTORS_LOCAL_KEY = 'medicDoctors';
 
+// Cancel superseded panel animations when users switch menus quickly.
+const activePanelAnimations = new WeakMap();
+
 function getDefaultFundState() {
     return {
         balance: 70000,
@@ -1642,9 +1645,32 @@ function openUserHistory(username) {
     const label = document.getElementById('historyLabel');
     if (label) label.textContent = userProfiles[username]?.name || 'ไม่ระบุ';
     renderLog();
-    document.querySelectorAll('.nav-link').forEach((btn) => btn.classList.toggle('active', btn.dataset.target === 'historySection'));
-    document.querySelectorAll('main section').forEach((section) => section.classList.toggle('hidden', section.id !== 'historySection'));
-    playSectionEnter(document.getElementById('historySection'));
+    setDashboardPanelActive('historySection');
+}
+
+function setDashboardPanelActive(target) {
+    const workspace = document.getElementById('workspaceMain') || document.querySelector('main.dashboard-grid');
+    if (!workspace) return null;
+
+    const panels = Array.from(workspace.querySelectorAll(':scope > .panel'));
+    const nextPanel = panels.find((panel) => panel.id === target);
+    if (!nextPanel) return null;
+
+    const changed = nextPanel.classList.contains('hidden');
+    panels.forEach((panel) => {
+        const active = panel === nextPanel;
+        panel.classList.toggle('hidden', !active);
+        panel.setAttribute('aria-hidden', String(!active));
+        panel.inert = !active;
+    });
+
+    document.querySelectorAll('.nav-link').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.target === target);
+        btn.setAttribute('aria-current', btn.dataset.target === target ? 'page' : 'false');
+    });
+
+    if (changed) playSectionEnter(nextPanel);
+    return nextPanel;
 }
 
 function handleMenuSwitch(event) {
@@ -1662,20 +1688,11 @@ function handleMenuSwitch(event) {
         showAlert('เมนูลับ', 'ยังไม่ได้ปลดล็อกเมนู Intel', 'warning');
         return;
     }
-    document.querySelectorAll('.nav-link').forEach((btn) => btn.classList.toggle('active', btn.dataset.target === target));
-    document.querySelectorAll('main section').forEach((section) => {
-        if (section.id === target) {
-            section.classList.remove('hidden');
-            playSectionEnter(section);
-        } else {
-            section.classList.add('hidden');
-        }
-    });
-    if (target === 'stockHistorySection') {
-        loadStockWithdrawals()
-            .then(renderStockWithdrawals)
-            .catch((err) => showAlert('โหลดประวัติสต็อกไม่สำเร็จ', err.message || 'กรุณาลองใหม่', 'error'));
-    }
+
+    setDashboardPanelActive(target);
+
+    // Shared data is hydrated during dashboard startup. Do not refetch it
+    // every time a user opens the stock history panel.
     if (target === 'intelSection' && typeof setupIntelAdmin === 'function') {
         setupIntelAdmin();
     }
@@ -1684,10 +1701,25 @@ function handleMenuSwitch(event) {
 function handleTabSwitch(event) {
     const mode = event.currentTarget.dataset.mode;
     if (!mode) return;
-    document.querySelectorAll('.tab-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.mode === mode));
-    document.getElementById('statusPanel').classList.toggle('hidden', mode !== 'status');
-    document.getElementById('forceOutPanel').classList.toggle('hidden', mode !== 'forceout');
-    playSectionEnter(document.getElementById(mode === 'status' ? 'statusPanel' : 'forceOutPanel'));
+
+    const statusPanel = document.getElementById('statusPanel');
+    const forceOutPanel = document.getElementById('forceOutPanel');
+    const nextPanel = mode === 'status' ? statusPanel : forceOutPanel;
+    if (!nextPanel) return;
+
+    const changed = nextPanel.classList.contains('hidden');
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+
+    [[statusPanel, mode === 'status'], [forceOutPanel, mode === 'forceout']].forEach(([panel, active]) => {
+        if (!panel) return;
+        panel.classList.toggle('hidden', !active);
+        panel.setAttribute('aria-hidden', String(!active));
+        panel.inert = !active;
+    });
+
+    if (changed) playSectionEnter(nextPanel);
 }
 
 function bindDashboardEvents() {
@@ -1714,7 +1746,15 @@ function bindDashboardEvents() {
     setupAvatarPicker();
 }
 
+function setDashboardLoading(isLoading) {
+    const workspace = document.getElementById('workspaceMain');
+    if (!workspace) return;
+    workspace.classList.toggle('is-loading', Boolean(isLoading));
+    workspace.setAttribute('aria-busy', String(Boolean(isLoading)));
+}
+
 async function initDashboard() {
+    setDashboardLoading(true);
     currentUser = sessionStorage.getItem('loggedInUser') || sessionStorage.getItem('medicUser');
     const hasApiToken = typeof getToken === 'function' && !!getToken();
     if (!currentUser || !hasApiToken) {
@@ -1734,6 +1774,7 @@ async function initDashboard() {
         showAlert('เชื่อมต่อฐานข้อมูลไม่สำเร็จ', 'กรุณารีเฟรชหน้าเว็บอีกครั้ง', 'error');
     }
     if (window.__apiDataLoaded !== true) {
+        setDashboardLoading(false);
         showAlert('ยังไม่สามารถเปิดแดชบอร์ดได้', 'ไม่สามารถโหลดข้อมูลจากเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง', 'error');
         return;
     }
@@ -1768,7 +1809,10 @@ async function initDashboard() {
         try { setupIntelUnlock(); } catch (_e) { /* ignore */ }
     }
 
-    // Dashboard data is server-backed; refresh is user/API driven.
+    // Reveal the hydrated workspace only after all initial renderers complete.
+    setDashboardLoading(false);
+    const firstPanel = document.getElementById('overviewSection');
+    if (firstPanel && !firstPanel.classList.contains('hidden')) playSectionEnter(firstPanel);
 }
 
 
@@ -1870,13 +1914,33 @@ function staggerChildren(container) {
     });
 }
 
-// อนิเมชันตอนสลับ section / แท็บ
+// Smooth panel entrance without forcing layout or leaving animation classes behind.
 function playSectionEnter(element) {
-    if (!element) return;
-    element.classList.remove('section-enter');
-    void element.offsetWidth;
-    element.classList.add('section-enter');
-    element.addEventListener('animationend', () => element.classList.remove('section-enter'), { once: true });
+    if (!element || typeof element.animate !== 'function') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+    const previous = activePanelAnimations.get(element);
+    if (previous) previous.cancel();
+
+    const animation = element.animate(
+        [
+            { opacity: 0, transform: 'translate3d(0, 12px, 0)' },
+            { opacity: 1, transform: 'translate3d(0, 0, 0)' }
+        ],
+        {
+            duration: 360,
+            easing: 'cubic-bezier(.22, 1, .36, 1)',
+            fill: 'both'
+        }
+    );
+
+    activePanelAnimations.set(element, animation);
+    animation.addEventListener('finish', () => {
+        animation.cancel();
+        if (activePanelAnimations.get(element) === animation) {
+            activePanelAnimations.delete(element);
+        }
+    }, { once: true });
 }
 
 /* ---------- Login: video playlist + mouse-proximity focus ---------- */
@@ -2088,12 +2152,26 @@ function initTilt() {
     // kept as no-op for compatibility; focus effect replaces tilt
 }
 
-// อนิเมชันเข้าครั้งแรกของหน้าแดชบอร์ด
+// Animate the shell once. Content panels are animated only when activated.
 function initEntrance() {
-    const items = document.querySelectorAll('.topbar, .dashboard-nav .nav-link, .dashboard-grid > section');
-    items.forEach((el, i) => {
-        el.classList.add('reveal');
-        el.style.animationDelay = `${Math.min(i * 60, 420)}ms`;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const items = document.querySelectorAll('.page-dashboard > .topbar, .page-dashboard > .dashboard-nav .nav-link');
+
+    items.forEach((element, index) => {
+        if (typeof element.animate !== 'function') return;
+        const animation = element.animate(
+            [
+                { opacity: 0, transform: 'translate3d(0, 8px, 0)' },
+                { opacity: 1, transform: 'translate3d(0, 0, 0)' }
+            ],
+            {
+                duration: 320,
+                delay: Math.min(index * 22, 160),
+                easing: 'cubic-bezier(.22, 1, .36, 1)',
+                fill: 'both'
+            }
+        );
+        animation.addEventListener('finish', () => animation.cancel(), { once: true });
     });
 }
 
