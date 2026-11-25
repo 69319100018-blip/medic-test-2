@@ -73,10 +73,11 @@ const loginLimiter = rateLimit({
 
 function thaiNow() {
   const now = new Date();
+  const timeZone = 'Asia/Bangkok';
   return {
     now,
-    date: now.toLocaleDateString('th-TH'),
-    time: now.toLocaleTimeString('th-TH', { hour12: false }),
+    date: now.toLocaleDateString('th-TH', { timeZone }),
+    time: now.toLocaleTimeString('th-TH', { hour12: false, timeZone }),
     iso: now.toISOString()
   };
 }
