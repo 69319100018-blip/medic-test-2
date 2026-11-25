@@ -1068,7 +1068,7 @@ app.delete('/api/vehicle-item', authRequired, async (req, res) => {
 
 // ---------- Shared calendar events ----------
 function isValidCalendarDate(value) {
-  if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year, month, day] = value.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.toISOString().slice(0, 10) === value;
@@ -1086,7 +1086,7 @@ function parseCalendarEventInput(body) {
   if (!title || title.length > 160) return { error: 'ชื่อกิจกรรมต้องมีความยาว 1–160 ตัวอักษร' };
   if (description.length > 3000) return { error: 'รายละเอียดกิจกรรมยาวเกิน 3,000 ตัวอักษร' };
   if (location.length > 180) return { error: 'สถานที่ยาวเกิน 180 ตัวอักษร' };
-  const validTime = (value) => !value || /^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(value);
+  const validTime = (value) => !value || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
   if (!validTime(startTime) || !validTime(endTime)) return { error: 'รูปแบบเวลาไม่ถูกต้อง' };
   if (endTime && !startTime) return { error: 'กรุณาระบุเวลาเริ่มก่อนเวลาเสร็จสิ้น' };
   if (startTime && endTime && endTime < startTime) return { error: 'เวลาเสร็จสิ้นต้องไม่ก่อนเวลาเริ่ม' };
@@ -1160,7 +1160,7 @@ app.patch('/api/calendar-event', authRequired, calendarManagerRequired, async (r
   try {
     if (!needDb(res)) return;
     const id = String(req.body?.id || '').trim();
-    if (!/^[1-9]\\d{0,18}$/.test(id)) return res.status(400).json({ error: 'รหัสกิจกรรมไม่ถูกต้อง' });
+    if (!/^[1-9]\d{0,18}$/.test(id)) return res.status(400).json({ error: 'รหัสกิจกรรมไม่ถูกต้อง' });
     const parsed = parseCalendarEventInput(req.body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const event = parsed.value;
@@ -1188,7 +1188,7 @@ app.delete('/api/calendar-event', authRequired, calendarManagerRequired, async (
   try {
     if (!needDb(res)) return;
     const id = String(req.body?.id || req.query?.id || '').trim();
-    if (!/^[1-9]\\d{0,18}$/.test(id)) return res.status(400).json({ error: 'รหัสกิจกรรมไม่ถูกต้อง' });
+    if (!/^[1-9]\d{0,18}$/.test(id)) return res.status(400).json({ error: 'รหัสกิจกรรมไม่ถูกต้อง' });
     const rows = await sql`
       DELETE FROM public.calendar_events WHERE id = ${id}::bigint
       RETURNING id::text AS id
