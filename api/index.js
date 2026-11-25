@@ -317,36 +317,57 @@ app.post('/api/user-role', authRequired, async (req, res) => {
   try {
     if (!needDb(res)) return;
     if (!req.user.isAdmin) return res.status(403).json({ error: 'เฉพาะแอดมินเท่านั้น' });
+
     const { username, role, isAdmin, canViewMonitoring, description } = req.body || {};
     const uname = String(username || '').trim().toLowerCase();
-    if (!uname) return res.status(400).json({ error: 'ไม่มี username' });
+    if (!uname || uname.length > 64) return res.status(400).json({ error: 'ชื่อผู้ใช้ไม่ถูกต้อง' });
+
+    const hasRole = role !== undefined;
+    const hasAdmin = isAdmin !== undefined;
+    const hasMonitoring = canViewMonitoring !== undefined;
+    const hasDescription = description !== undefined;
+    if (!hasRole && !hasAdmin && !hasMonitoring && !hasDescription) {
+      return res.status(400).json({ error: 'ไม่มีข้อมูลสิทธิ์ที่ต้องการแก้ไข' });
+    }
+
+    let nextRole = null;
+    let nextDescription = null;
+    if (hasRole) {
+      if (typeof role !== 'string' || !role.trim() || role.trim().length > 80) {
+        return res.status(400).json({ error: 'ตำแหน่งต้องเป็นข้อความยาว 1–80 ตัวอักษร' });
+      }
+      nextRole = role.trim();
+    }
+    if (hasAdmin && typeof isAdmin !== 'boolean') {
+      return res.status(400).json({ error: 'isAdmin ต้องเป็น boolean' });
+    }
+    if (hasMonitoring && typeof canViewMonitoring !== 'boolean') {
+      return res.status(400).json({ error: 'canViewMonitoring ต้องเป็น boolean' });
+    }
+    if (hasDescription) {
+      if (typeof description !== 'string' || description.length > 500) {
+        return res.status(400).json({ error: 'คำอธิบายต้องเป็นข้อความไม่เกิน 500 ตัวอักษร' });
+      }
+      nextDescription = description;
+    }
     if (uname === req.user.sub && isAdmin === false) {
       return res.status(400).json({ error: 'ไม่สามารถถอดสิทธิ์แอดมินของตัวเองได้' });
     }
 
-    const rows = await sql`SELECT username FROM users WHERE username = ${uname}`;
-    if (!rows.length) return res.status(404).json({ error: 'ไม่พบผู้ใช้' });
-
-    if (role !== undefined) {
-      await sql`UPDATE users SET role = ${String(role)} WHERE username = ${uname}`;
-    }
-    if (isAdmin !== undefined) {
-      await sql`UPDATE users SET is_admin = ${!!isAdmin} WHERE username = ${uname}`;
-    }
-    if (canViewMonitoring !== undefined) {
-      await sql`UPDATE users SET can_view_monitoring = ${!!canViewMonitoring} WHERE username = ${uname}`;
-    }
-    if (description !== undefined) {
-      await sql`UPDATE users SET description = ${String(description)} WHERE username = ${uname}`;
-    }
-
-    const updated = await sql`
-      SELECT username, display_name AS name, role, avatar,
-             is_admin AS "isAdmin", can_view_monitoring AS "canViewMonitoring",
-             description AS desc
-      FROM users WHERE username = ${uname}
+    // All permission fields are updated atomically; explicit false values are preserved.
+    const rows = await sql`
+      UPDATE users
+      SET role = COALESCE(${nextRole}, role),
+          is_admin = COALESCE(${hasAdmin ? isAdmin : null}, is_admin),
+          can_view_monitoring = COALESCE(${hasMonitoring ? canViewMonitoring : null}, can_view_monitoring),
+          description = COALESCE(${nextDescription}, description)
+      WHERE username = ${uname}
+      RETURNING username, display_name AS name, role, avatar,
+                is_admin AS "isAdmin", can_view_monitoring AS "canViewMonitoring",
+                description AS desc
     `;
-    res.json({ ok: true, user: updated[0] });
+    if (!rows.length) return res.status(404).json({ error: 'ไม่พบผู้ใช้' });
+    return res.json({ ok: true, user: rows[0] });
   } catch (err) {
     safeError(res, err);
   }
