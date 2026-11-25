@@ -131,6 +131,13 @@ function monitoringRequired(req, res, next) {
   next();
 }
 
+function stockManagerRequired(req, res, next) {
+  const role = String(req.user?.role || '').toLowerCase();
+  const director = role.includes('ผู้อำนวยการ') && !role.includes('รอง');
+  if (!req.user?.isAdmin && !director) return res.status(403).json({ error: 'ไม่มีสิทธิ์จัดการสต็อก' });
+  return next();
+}
+
 function safeError(res, err, status = 500) {
   console.error(err);
   res.status(status).json({ error: status === 500 ? 'เกิดข้อผิดพลาดภายใน' : (err.message || 'error') });
@@ -591,64 +598,83 @@ app.post('/api/fund-tx', authRequired, async (req, res) => {
   try {
     if (!needDb(res)) return;
     const { type, amount, note = '', target } = req.body || {};
-    const username = req.user.sub;
-    const amt = Number(amount);
-    if (!type || !Number.isFinite(amt) || amt <= 0) {
-      return res.status(400).json({ error: 'ข้อมูลไม่ครบหรือจำนวนเงินไม่ถูกต้อง' });
+    const rawAmount = Number(amount);
+    const cents = Math.round(rawAmount * 100);
+    if (!Number.isFinite(rawAmount) || rawAmount <= 0 || rawAmount > 1000000000 ||
+        Math.abs(rawAmount * 100 - cents) > 1e-7) {
+      return res.status(400).json({ error: 'จำนวนเงินต้องมากกว่า 0 และมีทศนิยมได้ไม่เกิน 2 ตำแหน่ง' });
     }
-    if (type === 'admin_add' && !req.user.isAdmin) {
-      return res.status(403).json({ error: 'เฉพาะแอดมินเท่านั้น' });
-    }
-    const t = thaiNow();
-    const fundRows = await sql`SELECT * FROM central_fund WHERE id = 1`;
-    const f = fundRows[0];
-    if (!f) return res.status(500).json({ error: 'ไม่พบข้อมูลกองกลาง' });
-
-    let balance = Number(f.balance);
-    let cash = Number(f.cash);
-    let deposit = Number(f.deposit);
-    let reserve = Number(f.reserve);
-    let income = Number(f.total_income);
-    let expense = Number(f.total_expense);
-    let histType = '';
-
-    if (type === 'deposit') {
-      balance += amt; cash += amt; income += amt; histType = 'ฝาก';
-    } else if (type === 'withdraw') {
-      if (amt > balance) return res.status(400).json({ error: 'ยอดเงินไม่เพียงพอ' });
-      balance -= amt; cash = Math.max(0, cash - amt); expense += amt; histType = 'ถอน';
-    } else if (type === 'admin_add') {
-      if (target === 'deposit') { deposit += amt; balance += amt; histType = 'เพิ่มเงินฝาก'; }
-      else { reserve += amt; balance += amt; histType = 'เพิ่มเงินสำรอง'; }
-    } else {
+    if (!['deposit', 'withdraw', 'admin_add'].includes(type)) {
       return res.status(400).json({ error: 'ประเภทธุรกรรมไม่ถูกต้อง' });
     }
+    if (type === 'admin_add') {
+      if (!req.user.isAdmin) return res.status(403).json({ error: 'เฉพาะแอดมินเท่านั้น' });
+      if (!['deposit', 'reserve'].includes(target)) {
+        return res.status(400).json({ error: 'เป้าหมายเงินต้องเป็น deposit หรือ reserve' });
+      }
+    }
+    const amt = cents / 100;
+    const memo = String(note || '').trim();
+    if (memo.length > 500) return res.status(400).json({ error: 'หมายเหตุต้องไม่เกิน 500 ตัวอักษร' });
 
-    await sql`
-      UPDATE central_fund SET
-        balance = ${balance}, cash = ${cash}, deposit = ${deposit}, reserve = ${reserve},
-        total_income = ${income}, total_expense = ${expense}, updated_at = NOW()
-      WHERE id = 1
+    const username = req.user.sub;
+    const t = thaiNow();
+    const historyType = type === 'deposit' ? 'ฝาก' :
+      type === 'withdraw' ? 'ถอน' : target === 'deposit' ? 'เพิ่มเงินฝาก' : 'เพิ่มเงินสำรอง';
+
+    // The balance mutation and ledger insert commit in one SQL statement.
+    // PostgreSQL row locking serializes concurrent withdrawals/deposits.
+    const result = await sql`
+      WITH updated AS (
+        UPDATE central_fund
+        SET
+          balance = balance + CASE WHEN ${type} = 'withdraw' THEN -${amt} ELSE ${amt} END,
+          cash = CASE
+            WHEN ${type} = 'deposit' THEN cash + ${amt}
+            WHEN ${type} = 'withdraw' THEN GREATEST(0, cash - ${amt})
+            ELSE cash
+          END,
+          deposit = CASE WHEN ${type} = 'admin_add' AND ${target} = 'deposit'
+                         THEN deposit + ${amt} ELSE deposit END,
+          reserve = CASE WHEN ${type} = 'admin_add' AND ${target} = 'reserve'
+                         THEN reserve + ${amt} ELSE reserve END,
+          total_income = CASE WHEN ${type} = 'deposit' THEN total_income + ${amt} ELSE total_income END,
+          total_expense = CASE WHEN ${type} = 'withdraw' THEN total_expense + ${amt} ELSE total_expense END,
+          updated_at = NOW()
+        WHERE id = 1 AND (${type} <> 'withdraw' OR balance >= ${amt})
+        RETURNING balance
+      ),
+      history AS (
+        INSERT INTO fund_history (username, type, amount, note, date_th, time_th)
+        SELECT ${username}, ${historyType}, ${amt}, ${memo}, ${t.date}, ${t.time}
+        FROM updated
+        RETURNING id
+      )
+      SELECT updated.balance FROM updated INNER JOIN history ON TRUE
     `;
-    await sql`
-      INSERT INTO fund_history (username, type, amount, note, date_th, time_th)
-      VALUES (${username}, ${histType}, ${amt}, ${note}, ${t.date}, ${t.time})
-    `;
-    const fundProfile = await lookupUserProfile(username);
-    const fundColor = (type === 'withdraw') ? 0xef4444 : 0x22c55e;
+
+    if (!result.length) {
+      const exists = await sql`SELECT id FROM central_fund WHERE id = 1`;
+      if (!exists.length) return res.status(500).json({ error: 'ไม่พบข้อมูลกองกลาง' });
+      return res.status(409).json({ error: 'ยอดเงินไม่เพียงพอสำหรับรายการนี้' });
+    }
+
+    const balance = Number(result[0].balance);
+    const profile = await lookupUserProfile(username);
     notifyDiscordFundStock({
-      title: type === 'withdraw' ? '💸 ถอนเงินกองกลาง' : (type === 'admin_add' ? '🏦 เพิ่มเงินกองกลาง (แอดมิน)' : '💰 ฝากเงินกองกลาง'),
-      color: fundColor,
+      title: type === 'withdraw' ? '💸 ถอนเงินกองกลาง' :
+        type === 'admin_add' ? '🏦 เพิ่มเงินกองกลาง (แอดมิน)' : '💰 ฝากเงินกองกลาง',
+      color: type === 'withdraw' ? 0xef4444 : 0x22c55e,
       fields: [
-        { name: 'ผู้ทำรายการ', value: fundProfile.name || username, inline: true },
-        { name: 'ประเภท', value: histType, inline: true },
+        { name: 'ผู้ทำรายการ', value: profile.name || username, inline: true },
+        { name: 'ประเภท', value: historyType, inline: true },
         { name: 'จำนวน', value: `${amt.toLocaleString('th-TH')} บาท`, inline: true },
-        { name: 'คงเหลือ', value: `${Number(balance).toLocaleString('th-TH')} บาท`, inline: true },
-        note ? { name: 'หมายเหตุ', value: String(note).slice(0, 200), inline: false } : null,
+        { name: 'คงเหลือ', value: `${balance.toLocaleString('th-TH')} บาท`, inline: true },
+        memo ? { name: 'หมายเหตุ', value: memo.slice(0, 200), inline: false } : null,
         { name: 'เวลา', value: `${t.date} ${t.time}`, inline: true }
       ]
     }).catch(() => {});
-    res.json({ ok: true, balance });
+    return res.json({ ok: true, balance });
   } catch (err) {
     safeError(res, err);
   }
@@ -670,34 +696,41 @@ app.get('/api/stock', authRequired, async (_req, res) => {
   }
 });
 
-app.post('/api/stock', authRequired, async (req, res) => {
+app.post('/api/stock', authRequired, stockManagerRequired, async (req, res) => {
   try {
     if (!needDb(res)) return;
     const { name, quantity = 0, minQuantity = 0, source = '' } = req.body || {};
-    if (!name) return res.status(400).json({ error: 'กรุณากรอกชื่ออุปกรณ์' });
+    const itemName = String(name || '').trim();
+    const qty = Number(quantity);
+    const minQty = Number(minQuantity);
+    const itemSource = String(source || '').trim();
+    if (!itemName || itemName.length > 120) return res.status(400).json({ error: 'ชื่ออุปกรณ์ต้องมีความยาว 1–120 ตัวอักษร' });
+    if (!Number.isSafeInteger(qty) || qty < 0 || qty > 2147483647) return res.status(400).json({ error: 'จำนวนคงเหลือต้องเป็นจำนวนเต็มไม่ติดลบ' });
+    if (!Number.isSafeInteger(minQty) || minQty < 0 || minQty > 2147483647) return res.status(400).json({ error: 'จำนวนขั้นต่ำต้องเป็นจำนวนเต็มไม่ติดลบ' });
+    if (itemSource.length > 200) return res.status(400).json({ error: 'แหล่งที่มาต้องไม่เกิน 200 ตัวอักษร' });
+
     const t = thaiNow();
     const rows = await sql`
       INSERT INTO stock_items (name, quantity, min_quantity, source, added_by, date_th, time_th)
-      VALUES (${name}, ${Math.floor(quantity)}, ${Math.floor(minQuantity)},
-              ${source || 'ไม่ระบุแหล่งที่มา'}, ${req.user.sub}, ${t.date}, ${t.time})
+      VALUES (${itemName}, ${qty}, ${minQty}, ${itemSource || 'ไม่ระบุแหล่งที่มา'},
+              ${req.user.sub}, ${t.date}, ${t.time})
       RETURNING id, name, quantity, min_quantity AS "minQuantity", source,
                 added_by AS "addedBy", manual_status AS "manualStatus",
                 date_th AS date, time_th AS time
     `;
-    const stockProfile = await lookupUserProfile(req.user.sub);
+    const profile = await lookupUserProfile(req.user.sub);
     notifyDiscordFundStock({
-      title: '📦 เพิ่มสต็อกอุปกรณ์',
-      color: 0x3b82f6,
+      title: '📦 เพิ่มสต็อกอุปกรณ์', color: 0x3b82f6,
       fields: [
-        { name: 'ผู้เพิ่ม', value: stockProfile.name || req.user.sub, inline: true },
-        { name: 'รายการ', value: name, inline: true },
-        { name: 'จำนวน', value: `${Math.floor(quantity)} ชิ้น`, inline: true },
-        { name: 'ขั้นต่ำ', value: `${Math.floor(minQuantity)} ชิ้น`, inline: true },
-        { name: 'แหล่งที่มา', value: source || 'ไม่ระบุ', inline: true },
+        { name: 'ผู้เพิ่ม', value: profile.name || req.user.sub, inline: true },
+        { name: 'รายการ', value: itemName, inline: true },
+        { name: 'จำนวน', value: `${qty} ชิ้น`, inline: true },
+        { name: 'ขั้นต่ำ', value: `${minQty} ชิ้น`, inline: true },
+        { name: 'แหล่งที่มา', value: itemSource || 'ไม่ระบุ', inline: true },
         { name: 'เวลา', value: `${t.date} ${t.time}`, inline: true }
       ]
     }).catch(() => {});
-    res.json(rows[0]);
+    return res.status(201).json(rows[0]);
   } catch (err) {
     safeError(res, err);
   }
@@ -706,50 +739,117 @@ app.post('/api/stock', authRequired, async (req, res) => {
 app.patch('/api/stock-item', authRequired, async (req, res) => {
   try {
     if (!needDb(res)) return;
-    const id = req.body?.id ?? req.query?.id;
-    if (!id) return res.status(400).json({ error: 'ไม่มี id' });
-    const { quantity, minQuantity, manualStatus, delta, requester, price = 0, note = '' } = req.body || {};
+    const rawId = req.body?.id ?? req.query?.id;
+    const id = String(rawId ?? '');
+    if (!/^[1-9]\\d{0,18}$/.test(id)) return res.status(400).json({ error: 'รหัสรายการไม่ถูกต้อง' });
+
+    const { quantity, minQuantity, manualStatus, delta } = req.body || {};
     if (delta !== undefined) {
-      const amt = Math.floor(Number(delta));
-      const current = await sql`SELECT id, name, quantity FROM stock_items WHERE id = ${id}`;
-      if (!current.length) return res.status(404).json({ error: 'ไม่พบรายการ' });
-      const item = current[0];
-      const newQty = Math.max(0, Number(item.quantity) + amt);
-      if (amt < 0 && Math.abs(amt) > Number(item.quantity)) {
-        return res.status(400).json({ error: `สต็อกไม่พอ คงเหลือ ${item.quantity} ชิ้น` });
+      const amount = Number(delta);
+      if (!Number.isSafeInteger(amount) || amount === 0 || Math.abs(amount) > 1000000) {
+        return res.status(400).json({ error: 'จำนวนที่ปรับต้องเป็นจำนวนเต็มตั้งแต่ 1 ถึง 1,000,000' });
       }
-      await sql`UPDATE stock_items SET quantity = ${newQty}, updated_at = NOW() WHERE id = ${id}`;
+      if (amount > 0) {
+        const role = String(req.user?.role || '').toLowerCase();
+        if (!req.user?.isAdmin && !(role.includes('ผู้อำนวยการ') && !role.includes('รอง'))) {
+          return res.status(403).json({ error: 'ไม่มีสิทธิ์เติมสต็อก' });
+        }
+      }
+
+      const { requester = '', price = 0, note = '' } = req.body || {};
+      const requestedBy = String(requester || '').trim();
+      const memo = String(note || '').trim();
+      const unitPrice = Number(price);
+      if (requestedBy.length > 200) return res.status(400).json({ error: 'ชื่อผู้เบิกต้องไม่เกิน 200 ตัวอักษร' });
+      if (memo.length > 500) return res.status(400).json({ error: 'หมายเหตุต้องไม่เกิน 500 ตัวอักษร' });
+      if (!Number.isFinite(unitPrice) || unitPrice < 0 || unitPrice > 9999999999.99 ||
+          Math.abs(unitPrice * 100 - Math.round(unitPrice * 100)) > 1e-7) {
+        return res.status(400).json({ error: 'ราคาต้องเป็นตัวเลขไม่ติดลบและมีทศนิยมได้ไม่เกิน 2 ตำแหน่ง' });
+      }
+
       const t = thaiNow();
-      await sql`
-        INSERT INTO stock_withdrawals (stock_id, stock_name, username, requester, quantity, is_add, price, note, date_th, time_th)
-        VALUES (${id}, ${item.name}, ${req.user.sub}, ${requester || null}, ${Math.abs(amt)}, ${amt > 0}, ${price}, ${note}, ${t.date}, ${t.time})
+      const rows = await sql`
+        WITH updated AS (
+          UPDATE stock_items
+          SET quantity = quantity + ${amount}, updated_at = NOW()
+          WHERE id = ${id} AND quantity + ${amount} >= 0
+          RETURNING id, name, quantity
+        ),
+        history AS (
+          INSERT INTO stock_withdrawals
+            (stock_id, stock_name, username, requester, quantity, is_add, price, note, date_th, time_th)
+          SELECT id, name, ${req.user.sub}, ${requestedBy || null},
+                 ${Math.abs(amount)}, ${amount > 0}, ${unitPrice}, ${memo}, ${t.date}, ${t.time}
+          FROM updated
+          RETURNING id
+        )
+        SELECT updated.id, updated.name, updated.quantity
+        FROM updated INNER JOIN history ON TRUE
       `;
-      const deltaProfile = await lookupUserProfile(req.user.sub);
+
+      if (!rows.length) {
+        const exists = await sql`SELECT id, quantity FROM stock_items WHERE id = ${id}`;
+        if (!exists.length) return res.status(404).json({ error: 'ไม่พบรายการสต็อก' });
+        return res.status(409).json({ error: `สต็อกไม่พอ คงเหลือ ${exists[0].quantity} ชิ้น` });
+      }
+
+      const item = rows[0];
+      const profile = await lookupUserProfile(req.user.sub);
       notifyDiscordFundStock({
-        title: amt > 0 ? '📥 เติมสต็อกอุปกรณ์' : '📤 เบิกสต็อกอุปกรณ์',
-        color: amt > 0 ? 0x22c55e : 0xf59e0b,
+        title: amount > 0 ? '📥 เติมสต็อกอุปกรณ์' : '📤 เบิกสต็อกอุปกรณ์',
+        color: amount > 0 ? 0x22c55e : 0xf59e0b,
         fields: [
-          { name: 'ผู้ทำรายการ', value: deltaProfile.name || req.user.sub, inline: true },
+          { name: 'ผู้ทำรายการ', value: profile.name || req.user.sub, inline: true },
           { name: 'รายการ', value: item.name, inline: true },
-          { name: 'จำนวน', value: `${Math.abs(amt)} ชิ้น`, inline: true },
-          { name: 'คงเหลือ', value: `${newQty} ชิ้น`, inline: true },
-          requester ? { name: 'ผู้ขอ', value: String(requester), inline: true } : null,
-          note ? { name: 'หมายเหตุ', value: String(note).slice(0, 200), inline: false } : null,
+          { name: 'จำนวน', value: `${Math.abs(amount)} ชิ้น`, inline: true },
+          { name: 'คงเหลือ', value: `${item.quantity} ชิ้น`, inline: true },
+          requestedBy ? { name: 'ผู้ขอ', value: requestedBy, inline: true } : null,
+          memo ? { name: 'หมายเหตุ', value: memo.slice(0, 200), inline: false } : null,
           { name: 'เวลา', value: `${t.date} ${t.time}`, inline: true }
         ]
       }).catch(() => {});
-      return res.json({ ok: true, quantity: newQty });
+      return res.json({ ok: true, quantity: Number(item.quantity) });
     }
-    if (quantity !== undefined) await sql`UPDATE stock_items SET quantity = ${Math.floor(quantity)}, updated_at = NOW() WHERE id = ${id}`;
-    if (minQuantity !== undefined) await sql`UPDATE stock_items SET min_quantity = ${Math.floor(minQuantity)}, updated_at = NOW() WHERE id = ${id}`;
-    if (manualStatus !== undefined) await sql`UPDATE stock_items SET manual_status = ${manualStatus}, updated_at = NOW() WHERE id = ${id}`;
-    res.json({ ok: true });
+
+    if (quantity === undefined && minQuantity === undefined && manualStatus === undefined) {
+      return res.status(400).json({ error: 'ไม่มีข้อมูลที่ต้องการแก้ไข' });
+    }
+    const role = String(req.user?.role || '').toLowerCase();
+    if (!req.user?.isAdmin && !(role.includes('ผู้อำนวยการ') && !role.includes('รอง'))) {
+      return res.status(403).json({ error: 'ไม่มีสิทธิ์แก้ไขรายการสต็อก' });
+    }
+
+    const nextQuantity = quantity === undefined ? null : Number(quantity);
+    const nextMinimum = minQuantity === undefined ? null : Number(minQuantity);
+    const allowedStatuses = ['auto', 'ready', 'ordered', 'waiting', 'damaged'];
+    if (nextQuantity !== null && (!Number.isSafeInteger(nextQuantity) || nextQuantity < 0 || nextQuantity > 2147483647)) {
+      return res.status(400).json({ error: 'จำนวนคงเหลือต้องเป็นจำนวนเต็มไม่ติดลบ' });
+    }
+    if (nextMinimum !== null && (!Number.isSafeInteger(nextMinimum) || nextMinimum < 0 || nextMinimum > 2147483647)) {
+      return res.status(400).json({ error: 'จำนวนขั้นต่ำต้องเป็นจำนวนเต็มไม่ติดลบ' });
+    }
+    if (manualStatus !== undefined && !allowedStatuses.includes(manualStatus)) {
+      return res.status(400).json({ error: 'สถานะสต็อกไม่ถูกต้อง' });
+    }
+
+    const rows = await sql`
+      UPDATE stock_items
+      SET quantity = COALESCE(${nextQuantity}, quantity),
+          min_quantity = COALESCE(${nextMinimum}, min_quantity),
+          manual_status = COALESCE(${manualStatus ?? null}, manual_status),
+          updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING id, name, quantity, min_quantity AS "minQuantity",
+                manual_status AS "manualStatus", updated_at AS "updatedAt"
+    `;
+    if (!rows.length) return res.status(404).json({ error: 'ไม่พบรายการสต็อก' });
+    return res.json({ ok: true, item: rows[0] });
   } catch (err) {
     safeError(res, err);
   }
 });
 
-app.delete('/api/stock-item', authRequired, async (req, res) => {
+app.delete('/api/stock-item', authRequired, stockManagerRequired, async (req, res) => {
   try {
     if (!needDb(res)) return;
     if (!req.user.isAdmin && !req.user.canViewMonitoring) {
