@@ -3,8 +3,8 @@
  * JWT + bcrypt + Helmet + rate-limit + restricted CORS
  * ไม่เสิร์ฟโฟลเดอร์ api/ และไฟล์ลับ
  */
-require('dotenv').config();
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -20,7 +20,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES = '12h';
 
 if (!process.env.DATABASE_URL) {
-  console.error('❌ ไม่พบ DATABASE_URL ใน .env');
+  console.error('❌ ไม่พบ DATABASE_URL ใน server-local/.env');
   process.exit(1);
 }
 if (!JWT_SECRET || JWT_SECRET.length < 32) {
