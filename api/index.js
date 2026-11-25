@@ -16,6 +16,9 @@ const jwt = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
 
 const app = express();
+// Vercel terminates TLS/proxy traffic and forwards the client IP in X-Forwarded-For.
+// Trust the immediate platform proxy so express-rate-limit can safely derive client IPs.
+app.set('trust proxy', 1);
 app.disable('x-powered-by');
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const JWT_EXPIRES = '12h';
