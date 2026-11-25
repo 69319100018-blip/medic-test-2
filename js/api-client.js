@@ -176,6 +176,18 @@ async function apiDeleteCalendarEvent(id) {
   return api('/calendar-event', { method: 'DELETE', body: { id } });
 }
 
+async function apiLoadLeaveRequests() {
+  return api('/leave-requests');
+}
+
+async function apiCreateLeaveRequest(payload) {
+  return api('/leave-requests', { method: 'POST', body: payload });
+}
+
+async function apiDecideLeaveRequest(payload) {
+  return api('/leave-request', { method: 'PATCH', body: payload });
+}
+
 async function apiLoadDoctors() {
   return api('/doctors');
 }

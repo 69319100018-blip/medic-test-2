@@ -16,6 +16,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
 const { canManageCalendar } = require('./calendar-permissions');
+const { canApproveLeave } = require('./leave-permissions');
 
 const app = express();
 // Vercel terminates TLS/proxy traffic and forwards the client IP in X-Forwarded-For.
@@ -149,6 +150,13 @@ function stockManagerRequired(req, res, next) {
 function calendarManagerRequired(req, res, next) {
   if (!canManageCalendar(req.user)) {
     return res.status(403).json({ error: 'เฉพาะรองผู้อำนวยการขึ้นไปเท่านั้นที่จัดการปฏิทินได้' });
+  }
+  return next();
+}
+
+function leaveApproverRequired(req, res, next) {
+  if (!canApproveLeave(req.user)) {
+    return res.status(403).json({ error: 'เฉพาะรองผู้อำนวยการขึ้นไปเท่านั้นที่อนุมัติคำขอลาได้' });
   }
   return next();
 }
@@ -1195,6 +1203,135 @@ app.delete('/api/calendar-event', authRequired, calendarManagerRequired, async (
     `;
     if (!rows.length) return res.status(404).json({ error: 'ไม่พบกิจกรรมนี้' });
     return res.json({ ok: true });
+  } catch (err) {
+    safeError(res, err);
+  }
+});
+
+// ---------- Leave requests ----------
+const ALLOWED_LEAVE_TYPES = new Set(['ลาป่วย', 'ลากิจ', 'ลาพักผ่อน', 'อื่นๆ']);
+
+function parseLeaveRequestInput(body) {
+  const leaveType = String(body?.leaveType || '').trim();
+  const startDate = String(body?.startDate || '').trim();
+  const endDate = String(body?.endDate || '').trim();
+  const reason = String(body?.reason || '').trim();
+
+  if (!ALLOWED_LEAVE_TYPES.has(leaveType)) return { error: 'กรุณาเลือกประเภทการลาให้ถูกต้อง' };
+  if (!isValidCalendarDate(startDate) || !isValidCalendarDate(endDate)) {
+    return { error: 'กรุณาระบุวันที่เริ่มลาและวันสิ้นสุดให้ถูกต้อง' };
+  }
+  if (endDate < startDate) return { error: 'วันสิ้นสุดต้องไม่ก่อนวันเริ่มลา' };
+  const days = (Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86400000 + 1;
+  if (days > 90) return { error: 'คำขอลาแต่ละครั้งต้องไม่เกิน 90 วัน' };
+  if (!reason || reason.length < 3 || reason.length > 1000) {
+    return { error: 'กรุณาระบุเหตุผลการลา 3–1,000 ตัวอักษร' };
+  }
+  return { value: { leaveType, startDate, endDate, reason } };
+}
+
+app.get('/api/leave-requests', authRequired, async (req, res) => {
+  try {
+    if (!needDb(res)) return;
+    const approver = canApproveLeave(req.user);
+    const rows = approver
+      ? await sql`
+          SELECT r.id::text AS id, r.username,
+                 COALESCE(u.display_name, r.username) AS "requesterName",
+                 u.role AS "requesterRole",
+                 r.leave_type AS "leaveType",
+                 TO_CHAR(r.start_date, 'YYYY-MM-DD') AS "startDate",
+                 TO_CHAR(r.end_date, 'YYYY-MM-DD') AS "endDate",
+                 r.reason, r.status,
+                 r.review_note AS "reviewNote",
+                 COALESCE(reviewer.display_name, r.reviewed_by) AS "reviewedByName",
+                 r.reviewed_at AS "reviewedAt",
+                 r.created_at AS "createdAt",
+                 r.updated_at AS "updatedAt"
+          FROM public.leave_requests r
+          LEFT JOIN public.users u ON u.username = r.username
+          LEFT JOIN public.users reviewer ON reviewer.username = r.reviewed_by
+          ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,
+                   r.created_at DESC, r.id DESC
+          LIMIT 500
+        `
+      : await sql`
+          SELECT r.id::text AS id, r.username,
+                 COALESCE(u.display_name, r.username) AS "requesterName",
+                 u.role AS "requesterRole",
+                 r.leave_type AS "leaveType",
+                 TO_CHAR(r.start_date, 'YYYY-MM-DD') AS "startDate",
+                 TO_CHAR(r.end_date, 'YYYY-MM-DD') AS "endDate",
+                 r.reason, r.status,
+                 r.review_note AS "reviewNote",
+                 COALESCE(reviewer.display_name, r.reviewed_by) AS "reviewedByName",
+                 r.reviewed_at AS "reviewedAt",
+                 r.created_at AS "createdAt",
+                 r.updated_at AS "updatedAt"
+          FROM public.leave_requests r
+          LEFT JOIN public.users u ON u.username = r.username
+          LEFT JOIN public.users reviewer ON reviewer.username = r.reviewed_by
+          WHERE r.username = ${req.user.sub}
+          ORDER BY r.created_at DESC, r.id DESC
+          LIMIT 200
+        `;
+    return res.json(rows);
+  } catch (err) {
+    safeError(res, err);
+  }
+});
+
+app.post('/api/leave-requests', authRequired, async (req, res) => {
+  try {
+    if (!needDb(res)) return;
+    const parsed = parseLeaveRequestInput(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const request = parsed.value;
+    const rows = await sql`
+      INSERT INTO public.leave_requests
+        (username, leave_type, start_date, end_date, reason)
+      VALUES
+        (${req.user.sub}, ${request.leaveType}, ${request.startDate}::date,
+         ${request.endDate}::date, ${request.reason})
+      RETURNING id::text AS id
+    `;
+    return res.status(201).json({ ok: true, id: rows[0].id });
+  } catch (err) {
+    safeError(res, err);
+  }
+});
+
+app.patch('/api/leave-request', authRequired, leaveApproverRequired, async (req, res) => {
+  try {
+    if (!needDb(res)) return;
+    const id = String(req.body?.id || '').trim();
+    const status = String(req.body?.status || '').trim();
+    const reviewNote = String(req.body?.reviewNote || '').trim();
+    if (!/^[1-9]\d{0,18}$/.test(id)) return res.status(400).json({ error: 'รหัสคำขอไม่ถูกต้อง' });
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'สถานะการพิจารณาไม่ถูกต้อง' });
+    }
+    if (reviewNote.length > 1000) return res.status(400).json({ error: 'หมายเหตุยาวเกิน 1,000 ตัวอักษร' });
+    if (status === 'rejected' && reviewNote.length < 3) {
+      return res.status(400).json({ error: 'กรุณาระบุเหตุผลที่ไม่อนุมัติอย่างน้อย 3 ตัวอักษร' });
+    }
+
+    const rows = await sql`
+      UPDATE public.leave_requests
+      SET status = ${status},
+          review_note = ${reviewNote || null},
+          reviewed_by = ${req.user.sub},
+          reviewed_at = NOW(),
+          updated_at = NOW()
+      WHERE id = ${id}::bigint AND status = 'pending'
+      RETURNING id::text AS id, status
+    `;
+    if (!rows.length) {
+      const existing = await sql`SELECT status FROM public.leave_requests WHERE id = ${id}::bigint LIMIT 1`;
+      if (!existing.length) return res.status(404).json({ error: 'ไม่พบคำขอลานี้' });
+      return res.status(409).json({ error: 'คำขอนี้ได้รับการพิจารณาไปแล้ว', status: existing[0].status });
+    }
+    return res.json({ ok: true, ...rows[0] });
   } catch (err) {
     safeError(res, err);
   }
