@@ -1674,6 +1674,30 @@ body.has-bg .card-form {
     flex-wrap: wrap;
 }
 
+.stock-status-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 100%;
+    min-width: 180px;
+}
+
+.stock-status-select {
+    min-width: 150px;
+    max-width: 100%;
+    padding: 7px 10px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 9px;
+    background: rgba(15, 23, 42, 0.72);
+    color: inherit;
+    font: inherit;
+}
+
+.stock-status-select:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
 .badge.stock-ok {
     color: #166534;
     background: rgba(22, 163, 74, 0.12);
