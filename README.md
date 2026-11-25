@@ -25,13 +25,14 @@ Node.js 20+, Express 4, Neon serverless PostgreSQL, bcryptjs, JWT bearer authent
 2. Create a Neon database and review/apply `schema.sql` after taking an appropriate backup.
 3. Copy `server-local/env.example` to `server-local/.env`.
 4. Set `DATABASE_URL`, a random `JWT_SECRET` (32+ characters), exact `ALLOWED_ORIGINS`, and `PORT`.
-5. Run:
+5. From the repository root, install and start:
 ```bash
-cd server-local
 npm ci
 npm start
 ```
-Open `http://localhost:3000/index.html`. Never commit `.env` or files named `env`.
+The server loads `server-local/.env` relative to its own directory. Open `http://localhost:3000/index.html`; use `npm run dev` for local hot reload.
+
+Never commit `.env` or files named `env`.
 
 ## Vercel
 Configure `DATABASE_URL`, `JWT_SECRET`, and exact `ALLOWED_ORIGINS` in Vercel for each environment. Never use `*`. Complete credential rotation before deploying.
