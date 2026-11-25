@@ -2,9 +2,9 @@
  * Medic Shift Log — API Client (Secure + JWT)
  * ใช้ path ชั้นเดียวทั้งหมด (/api/xxx) เพื่อให้ Vercel route ได้
  */
-const API_BASE = (window.location.origin.includes('localhost') || window.location.protocol === 'file:')
-  ? 'http://localhost:3000'
-  : '';
+// Use same-origin API paths for local and hosted deployments. The file://
+// fallback remains only for developers opening the HTML directly.
+const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
 
 const TOKEN_KEY = 'medicToken';
 const USER_KEY = 'medicUser';

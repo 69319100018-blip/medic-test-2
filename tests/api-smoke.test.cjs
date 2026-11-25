@@ -75,6 +75,13 @@ test('CORS does not grant access to an unconfigured origin', async () => {
   assert.equal(response.headers.get('access-control-allow-origin'), null);
 });
 
+test('browser API client uses same-origin URLs when served by the local server', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'api-client.js'), 'utf8');
+  assert.match(source, /const API_BASE = window\.location\.protocol === 'file:' \? 'http:\/\/localhost:3000' : '';/);
+});
+
 test('local runtime serves the frontend from the shared API app', async () => {
   const response = await fetch(`${localUrl}/`);
   assert.equal(response.status, 200);
