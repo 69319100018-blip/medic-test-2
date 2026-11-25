@@ -3,7 +3,8 @@
  * ตั้ง Environment Variables บน Vercel:
  *   DATABASE_URL, JWT_SECRET, ALLOWED_ORIGINS,
  *   DISCORD_WEBHOOK_URL (เข้า-ออกเวร),
- *   DISCORD_WEBHOOK_FUND_STOCK (เงิน/สต็อก),
+ *   DISCORD_WEBHOOK_FUND (เงินกองกลาง),
+ *   DISCORD_WEBHOOK_STOCK (เบิก/เติมสต็อก),
  *   DISCORD_WEBHOOK_VEHICLE (ทะเบียนรถ)
  */
 require('dotenv').config();
@@ -25,7 +26,8 @@ const JWT_EXPIRES = '12h';
 // Keep each Discord destination independent so one missing webhook never leaks
 // an event into another channel.
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
-const DISCORD_WEBHOOK_FUND_STOCK = process.env.DISCORD_WEBHOOK_FUND_STOCK || '';
+const DISCORD_WEBHOOK_FUND = process.env.DISCORD_WEBHOOK_FUND || '';
+const DISCORD_WEBHOOK_STOCK = process.env.DISCORD_WEBHOOK_STOCK || process.env.DISCORD_WEBHOOK_FUND_STOCK || '';
 const DISCORD_WEBHOOK_VEHICLE = process.env.DISCORD_WEBHOOK_VEHICLE || '';
 
 if (!process.env.DATABASE_URL) {
@@ -262,9 +264,14 @@ async function notifyDiscordShift({ type, username, displayName, role, date, tim
   await postDiscordWebhook(DISCORD_WEBHOOK_URL, discordEmbed({ title, color, fields }));
 }
 
-/** ช่องเบิกของ / เงินกองกลาง + สต็อก */
-async function notifyDiscordFundStock({ title, color, fields }) {
-  await postDiscordWebhook(DISCORD_WEBHOOK_FUND_STOCK, discordEmbed({ title, color, fields }));
+/** ช่องธุรกรรมเงินกองกลาง */
+async function notifyDiscordFund({ title, color, fields }) {
+  await postDiscordWebhook(DISCORD_WEBHOOK_FUND, discordEmbed({ title, color, fields }));
+}
+
+/** ช่องเบิก/เติมสต็อกอุปกรณ์ */
+async function notifyDiscordStock({ title, color, fields }) {
+  await postDiscordWebhook(DISCORD_WEBHOOK_STOCK, discordEmbed({ title, color, fields }));
 }
 
 /** ช่องทะเบียนรถ */
@@ -757,7 +764,7 @@ app.post('/api/fund-tx', authRequired, async (req, res) => {
 
     const balance = Number(result[0].balance);
     const profile = await lookupUserProfile(username);
-    notifyDiscordFundStock({
+    notifyDiscordFund({
       title: type === 'withdraw' ? '💸 ถอนเงินกองกลาง' :
         type === 'admin_add' ? '🏦 เพิ่มเงินกองกลาง (แอดมิน)' : '💰 ฝากเงินกองกลาง',
       color: type === 'withdraw' ? 0xef4444 : 0x22c55e,
@@ -815,7 +822,7 @@ app.post('/api/stock', authRequired, stockManagerRequired, async (req, res) => {
                 date_th AS date, time_th AS time
     `;
     const profile = await lookupUserProfile(req.user.sub);
-    notifyDiscordFundStock({
+    notifyDiscordStock({
       title: '📦 เพิ่มสต็อกอุปกรณ์', color: 0x3b82f6,
       fields: [
         { name: 'ผู้เพิ่ม', value: profile.name || req.user.sub, inline: true },
@@ -891,7 +898,7 @@ app.patch('/api/stock-item', authRequired, async (req, res) => {
 
       const item = rows[0];
       const profile = await lookupUserProfile(req.user.sub);
-      notifyDiscordFundStock({
+      notifyDiscordStock({
         title: amount > 0 ? '📥 เติมสต็อกอุปกรณ์' : '📤 เบิกสต็อกอุปกรณ์',
         color: amount > 0 ? 0x22c55e : 0xf59e0b,
         fields: [
