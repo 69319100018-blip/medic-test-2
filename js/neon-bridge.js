@@ -67,32 +67,49 @@
     }
 
     window.loadAllData = async function () {
+      window.__apiDataLoaded = false;
       try {
         currentUser = savedUser;
-        if (savedProfile && typeof userProfiles !== 'undefined') {
-          userProfiles[savedUser] = JSON.parse(savedProfile);
-        }
-        try {
-          const allUsers = await apiLoadUsers();
-          users = allUsers;
-          Object.keys(userProfiles).forEach((username) => delete userProfiles[username]);
-          Object.assign(userProfiles, allUsers);
-        } catch (_) {}
 
-        shiftLog = await apiLoadShifts();
-        centralFund = await apiLoadFund();
-        stockItems = await apiLoadStock();
-        vehicles = await apiLoadVehicles();
-        doctors = await apiLoadDoctors();
+        // Load a consistent dashboard snapshot. Do not partially replace local
+        // state if one API request fails.
+        const [allUsers, shifts, fund, stock, vehicleRows, doctorRows] = await Promise.all([
+          apiLoadUsers(),
+          apiLoadShifts(),
+          apiLoadFund(),
+          apiLoadStock(),
+          apiLoadVehicles(),
+          apiLoadDoctors()
+        ]);
+
+        users = allUsers || {};
+        Object.keys(userProfiles).forEach((username) => delete userProfiles[username]);
+        Object.assign(userProfiles, users);
+
+        shiftLog = shifts || {};
+        centralFund = fund;
+        stockItems = Array.isArray(stock) ? stock : [];
+        vehicles = Array.isArray(vehicleRows) ? vehicleRows : [];
+        doctors = Array.isArray(doctorRows) ? doctorRows : [];
+
         if (typeof canViewMonitoring === 'function' && canViewMonitoring(currentUser)) {
-          try { stockWithdrawals = await apiLoadStockWithdrawals(); } catch (_) { stockWithdrawals = []; }
+          try {
+            stockWithdrawals = await apiLoadStockWithdrawals();
+          } catch (_) {
+            stockWithdrawals = [];
+          }
+        } else {
+          stockWithdrawals = [];
         }
+
         stockOffline = false;
         vehicleOffline = false;
         doctorsOffline = false;
+        window.__apiDataLoaded = true;
       } catch (err) {
         console.error('[Neon]', err);
         if (window.Swal) Swal.fire('เชื่อมต่อฐานข้อมูลไม่ได้', err.message, 'error');
+        window.__apiDataLoaded = false;
       }
     };
 

@@ -1658,15 +1658,16 @@ async function initDashboard() {
     startClock();
     bindDashboardEvents();
 
-    // โหลดข้อมูลล่าสุดจากฐานข้อมูลกลางก่อนแสดงผล
+    // Load the server-backed state before rendering any dashboard data.
     try {
         await loadAllData();
     } catch (err) {
         showAlert('เชื่อมต่อฐานข้อมูลไม่สำเร็จ', 'กรุณารีเฟรชหน้าเว็บอีกครั้ง', 'error');
     }
-    await loadStockData();
-    await loadVehicleData();
-    await loadDoctorsData();
+    if (window.__apiDataLoaded !== true) {
+        showAlert('ยังไม่สามารถเปิดแดชบอร์ดได้', 'ไม่สามารถโหลดข้อมูลจากเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง', 'error');
+        return;
+    }
 
     renderProfile();
     renderHistoryControls();
@@ -1687,7 +1688,6 @@ async function initDashboard() {
             }
         });
     } else {
-        await loadStockWithdrawals();
         renderStockWithdrawals();
     }
     document.getElementById('fundAdminCard')?.classList.toggle('hidden', !isAdmin(currentUser));
@@ -1699,7 +1699,7 @@ async function initDashboard() {
         try { setupIntelUnlock(); } catch (_e) { /* ignore */ }
     }
 
-    // โหมด localStorage — ไม่ต้อง polling จากเซิร์ฟเวอร์
+    // Dashboard data is server-backed; refresh is user/API driven.
 }
 
 
