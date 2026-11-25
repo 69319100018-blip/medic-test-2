@@ -37,6 +37,15 @@ Never commit `.env` or files named `env`.
 ## Vercel
 Configure `DATABASE_URL`, `JWT_SECRET`, and exact `ALLOWED_ORIGINS` in Vercel for each environment. Never use `*`. Complete credential rotation before deploying.
 
+### Discord notifications
+Set these server-side environment variables in Vercel (Production) as encrypted secrets:
+
+- `DISCORD_WEBHOOK_URL` — shift check-in/check-out channel
+- `DISCORD_WEBHOOK_FUND_STOCK` — fund transactions and stock add/withdraw channel
+- `DISCORD_WEBHOOK_VEHICLE` — vehicle registration channel
+
+Each webhook URL already identifies its destination channel; a Discord server ID is not required for webhook delivery. Do not use a `NEXT_PUBLIC_` prefix. Local development can set the same keys in `server-local/.env`. Notifications are sent only after the database transaction succeeds, and Discord failures do not roll back the application action.
+
 ## Existing database migrations
 
 The schema file is the baseline for a new database. For an existing Neon database, review and apply files under `migrations/` individually after taking a backup. In particular, `001-open-shift-uniqueness.sql` requires resolving duplicate open-shift rows before the unique index can be created.
