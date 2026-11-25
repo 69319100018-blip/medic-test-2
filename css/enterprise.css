@@ -5,28 +5,28 @@
 
 :root {
   color-scheme: light;
-  --app-canvas: #f3f6fb;
+  --app-canvas: #edf5fc;
   --app-surface: #ffffff;
-  --app-surface-muted: #f7f9fc;
-  --app-border: #e3e9f2;
-  --app-border-strong: #d5deea;
-  --app-text: #17283e;
-  --app-text-muted: #65758b;
-  --app-text-soft: #8b98a9;
-  --app-navy: #142a43;
-  --app-navy-strong: #0d2035;
-  --app-navy-soft: #203c59;
-  --app-primary: #2563a6;
-  --app-primary-strong: #1d4f88;
-  --app-primary-soft: #eaf2fb;
-  --app-teal: #0f8277;
-  --app-teal-soft: #e8f6f3;
-  --app-success: #16835d;
-  --app-success-soft: #e9f7f0;
-  --app-warning: #a96b13;
-  --app-warning-soft: #fff5e5;
-  --app-danger: #bd454b;
-  --app-danger-soft: #fff0f0;
+  --app-surface-muted: #f6faff;
+  --app-border: #d8e6f2;
+  --app-border-strong: #bfd3e4;
+  --app-text: #17324d;
+  --app-text-muted: #506a83;
+  --app-text-soft: #5c7188;
+  --app-navy: #2d526e;
+  --app-navy-strong: #204765;
+  --app-navy-soft: #426985;
+  --app-primary: #317bb6;
+  --app-primary-strong: #205e93;
+  --app-primary-soft: #e5f2fc;
+  --app-teal: #176e7b;
+  --app-teal-soft: #e8f5f7;
+  --app-success: #176f52;
+  --app-success-soft: #e8f5ee;
+  --app-warning: #8a5a08;
+  --app-warning-soft: #fff4de;
+  --app-danger: #a83c49;
+  --app-danger-soft: #ffeff0;
   --app-radius-sm: 9px;
   --app-radius-md: 13px;
   --app-radius-lg: 18px;
@@ -3449,6 +3449,234 @@ body {
   .skeleton-block,
   .dashboard-skeleton-avatar,
   .intel-skeleton-card .skeleton-line {
+    animation: none !important;
+  }
+}
+
+/* ==========================================================================
+   CLEAR SKY PALETTE — soft blue + white, stronger readable text
+   Color-only refinement. Layout, structure and interactions stay unchanged.
+   ========================================================================== */
+
+body.dashboard-body {
+  background:
+    radial-gradient(ellipse at 12% 4%, rgba(83, 153, 202, .055), transparent 32%),
+    radial-gradient(ellipse at 92% 18%, rgba(82, 166, 186, .045), transparent 30%),
+    linear-gradient(145deg, #edf5fc 0%, #eaf3fb 54%, #f4f9fe 100%) !important;
+  color: #17324d;
+}
+
+/* A softer blue workspace instead of a dark navy block */
+.page-dashboard > .dashboard-nav {
+  border-color: #c9dceb;
+  background: linear-gradient(180deg, #e5f1fa 0%, #dcebf7 100%);
+  box-shadow: 0 10px 28px rgba(36, 82, 116, .10);
+  scrollbar-color: #a8c3d8 transparent;
+}
+
+.page-dashboard > .dashboard-nav::before {
+  color: #56758f;
+}
+
+.page-dashboard .nav-link {
+  border-color: transparent;
+  color: #31536e;
+}
+
+.page-dashboard .nav-link i {
+  color: #5c7b96;
+}
+
+.page-dashboard .nav-link:hover:not(.active) {
+  border-color: #c6ddeb;
+  background: #eef7fd;
+  color: #173f60;
+}
+
+.page-dashboard .nav-link.active {
+  border-color: #b4d1e5;
+  background: linear-gradient(90deg, #c9e3f5, #d9ecf8);
+  color: #174a72;
+  box-shadow: inset 3px 0 0 #347fb7 !important;
+}
+
+.page-dashboard .nav-link.active i {
+  color: #216da5;
+}
+
+/* White work surfaces with slightly clearer blue edges */
+.page-dashboard .panel,
+.page-dashboard .fund-card,
+.page-dashboard .stock-item,
+.page-dashboard .member-card,
+.page-dashboard .status-card,
+.page-dashboard .forceout-card,
+.page-dashboard .doctor-card {
+  border-color: #d5e4f0;
+}
+
+.page-dashboard .panel {
+  background: #fff !important;
+}
+
+.page-dashboard .fund-card {
+  background: #f8fbff;
+}
+
+.page-dashboard .panel-header .label,
+.page-dashboard .panel-header .label::before {
+  color: #176e7b;
+}
+
+.page-dashboard .profile-header .label,
+.page-dashboard .profile-header .subtext,
+.page-dashboard .panel-header .help-text,
+.page-dashboard .help-text {
+  color: #506a83;
+}
+
+.page-dashboard .date-pill,
+.page-dashboard .history-highlight {
+  border-color: #cddfed;
+  background: #eef6fc;
+  color: #345873;
+}
+
+.page-dashboard .profile-stat {
+  border-color: #c7e2d4;
+  background: #edf7f1;
+}
+
+.page-dashboard .profile-stat span {
+  color: #426d59;
+}
+
+.page-dashboard .profile-stat strong {
+  color: #176746;
+}
+
+/* Secondary controls and input hints: readable on pale surfaces */
+.page-dashboard .btn-secondary {
+  border-color: #c6d9e8;
+  background: #fff;
+  color: #294d6b;
+}
+
+.page-dashboard .btn-secondary:hover:not(:disabled) {
+  border-color: #9ebed6;
+  background: #f0f7fc;
+  color: #173f60;
+}
+
+.page-dashboard .btn-tertiary {
+  border-color: #cbdfee;
+  background: #eaf4fb;
+  color: #205e93;
+}
+
+.page-dashboard .btn-tertiary:hover:not(:disabled) {
+  border-color: #a9c9df;
+  background: #deeffa;
+}
+
+.page-dashboard input::placeholder,
+.page-dashboard textarea::placeholder,
+.login-body .input-wrap .form-control::placeholder {
+  color: #657d94;
+  opacity: 1;
+}
+
+.page-dashboard input:not([type="checkbox"]):not([type="radio"]),
+.page-dashboard select,
+.page-dashboard textarea,
+.login-body .input-wrap .form-control {
+  border-color: #bfd3e4;
+  color: #17324d;
+}
+
+/* Calm, legible action colors. Disabled actions remain readable. */
+.page-dashboard .btn-success {
+  border-color: #176b4e;
+  background: #187653;
+  color: #fff;
+  box-shadow: 0 3px 9px rgba(23, 111, 82, .10);
+}
+
+.page-dashboard .btn-success:hover:not(:disabled) {
+  background: #126343;
+  box-shadow: 0 5px 12px rgba(23, 111, 82, .15);
+}
+
+.page-dashboard .btn-danger {
+  border-color: #a83c49;
+  background: #b44752;
+  color: #fff;
+  box-shadow: 0 3px 9px rgba(168, 60, 73, .10);
+}
+
+.page-dashboard .btn-danger:hover:not(:disabled) {
+  background: #983642;
+  box-shadow: 0 5px 12px rgba(168, 60, 73, .14);
+}
+
+body.dashboard-body .page-dashboard .btn-success:disabled {
+  opacity: 1 !important;
+  border: 1px solid #b7d5c5 !important;
+  background: #dceee5 !important;
+  color: #245d48 !important;
+  box-shadow: none !important;
+  animation: none !important;
+  cursor: not-allowed;
+}
+
+body.dashboard-body .page-dashboard .btn-danger:disabled {
+  opacity: 1 !important;
+  border: 1px solid #e4c5c8 !important;
+  background: #f4e2e4 !important;
+  color: #87404a !important;
+  box-shadow: none !important;
+  animation: none !important;
+  cursor: not-allowed;
+}
+
+/* Remove the strong pulsing glow that competes with action labels. */
+.page-dashboard .btn-success.cta-glow,
+.page-dashboard .btn-danger.cta-glow {
+  animation: none !important;
+}
+
+.page-dashboard .btn-success.cta-glow {
+  box-shadow: 0 3px 10px rgba(23, 111, 82, .12) !important;
+}
+
+.page-dashboard .btn-danger.cta-glow {
+  box-shadow: 0 3px 10px rgba(168, 60, 73, .12) !important;
+}
+
+/* Keep status colors distinct, but less fluorescent and more consistent. */
+.page-dashboard .badge.in,
+.page-dashboard .badge.stock-ok {
+  border-color: #c2dfce;
+  background: #e8f5ee;
+  color: #1b6548;
+}
+
+.page-dashboard .badge.out,
+.page-dashboard .badge.stock-out {
+  border-color: #e8c9cc;
+  background: #ffeff0;
+  color: #943b45;
+}
+
+.page-dashboard .badge.stock-low {
+  border-color: #ead8b4;
+  background: #fff4de;
+  color: #80550e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-dashboard .btn-success.cta-glow,
+  .page-dashboard .btn-danger.cta-glow {
     animation: none !important;
   }
 }
