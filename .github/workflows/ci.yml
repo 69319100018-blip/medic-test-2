@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [main]
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -18,8 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # The original lockfile was incomplete and referenced an unavailable mirror.
-      # Build a clean lockfile against the official npm registry before npm ci.
+      # One-time repair: the committed lockfile was incomplete and included
+      # a registry mirror that no longer resolves. Rebuild from npmjs.org.
       - name: Generate clean npm lockfile
         run: |
           rm -f package-lock.json
@@ -29,6 +29,14 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Verify source and API smoke tests
         run: npm run verify
+      - name: Commit repaired lockfile
+        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: repair npm dependency lockfile"
+          git push origin "${GITHUB_REF_NAME}"
       - name: Publish generated lockfile for review
         uses: actions/upload-artifact@v4
         with:
