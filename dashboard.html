@@ -72,7 +72,30 @@
             </button>
         </nav>
 
-        <main class="dashboard-grid" id="workspaceMain">
+        <main class="dashboard-grid is-loading" id="workspaceMain" aria-busy="true">
+            <div class="dashboard-skeleton" id="dashboardLoadingSkeleton" aria-hidden="true">
+                <div class="dashboard-skeleton-head">
+                    <span class="dashboard-skeleton-avatar"></span>
+                    <div class="dashboard-skeleton-head-copy">
+                        <span class="skeleton-line is-medium"></span>
+                        <span class="skeleton-line is-short"></span>
+                    </div>
+                </div>
+                <div class="dashboard-skeleton-grid">
+                    <div class="dashboard-skeleton-card">
+                        <span class="skeleton-line is-short"></span>
+                        <span class="skeleton-line is-title"></span>
+                        <span class="skeleton-block"></span>
+                        <span class="skeleton-line is-long"></span>
+                    </div>
+                    <div class="dashboard-skeleton-card">
+                        <span class="skeleton-line is-short"></span>
+                        <span class="skeleton-line is-title"></span>
+                        <span class="skeleton-block"></span>
+                        <span class="skeleton-line is-medium"></span>
+                    </div>
+                </div>
+            </div>
             <section class="panel panel-profile" id="overviewSection">
                 <div class="profile-header">
                     <div class="avatar-wrap" id="avatarWrap">
