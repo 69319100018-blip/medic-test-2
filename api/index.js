@@ -22,10 +22,11 @@ app.set('trust proxy', 1);
 app.disable('x-powered-by');
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const JWT_EXPIRES = '12h';
+// Keep each Discord destination independent so one missing webhook never leaks
+// an event into another channel.
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
-const DISCORD_WEBHOOK_FUND_STOCK = process.env.DISCORD_WEBHOOK_FUND_STOCK || process.env.DISCORD_WEBHOOK_URL || '';
-const DISCORD_WEBHOOK_VEHICLE = process.env.DISCORD_WEBHOOK_VEHICLE || process.env.DISCORD_WEBHOOK_URL || '';
-const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID || '';
+const DISCORD_WEBHOOK_FUND_STOCK = process.env.DISCORD_WEBHOOK_FUND_STOCK || '';
+const DISCORD_WEBHOOK_VEHICLE = process.env.DISCORD_WEBHOOK_VEHICLE || '';
 
 if (!process.env.DATABASE_URL) {
   console.error('Missing DATABASE_URL');
@@ -200,27 +201,47 @@ function formatShiftDuration(startIso, endDate = new Date()) {
 async function postDiscordWebhook(webhookUrl, body) {
   if (!webhookUrl) return;
   try {
+    const parsedUrl = new URL(webhookUrl);
+    if (
+      parsedUrl.protocol !== 'https:' ||
+      !['discord.com', 'discordapp.com'].includes(parsedUrl.hostname) ||
+      !parsedUrl.pathname.startsWith('/api/webhooks/')
+    ) {
+      console.error('Discord webhook skipped: invalid destination URL');
+      return;
+    }
+
     const res = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000)
     });
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      console.error('Discord webhook failed', res.status, text);
+      console.error('Discord webhook failed', res.status);
     }
   } catch (e) {
-    console.error('Discord webhook error', e);
+    console.error('Discord webhook error', e?.name || 'request_failed');
   }
 }
 
 function discordEmbed({ title, color, fields }) {
+  const safeFields = (fields || [])
+    .filter(Boolean)
+    .slice(0, 25)
+    .map((field) => ({
+      name: String(field.name || 'รายละเอียด').slice(0, 256),
+      value: String(field.value ?? '-').slice(0, 1024) || '-',
+      inline: Boolean(field.inline)
+    }));
+
   return {
     username: 'Medic Shift Bot',
+    allowed_mentions: { parse: [] },
     embeds: [{
-      title,
+      title: String(title || 'Medic Shift Log').slice(0, 256),
       color,
-      fields: (fields || []).filter(Boolean),
+      fields: safeFields,
       footer: { text: 'Medic Shift Log' },
       timestamp: new Date().toISOString()
     }]
@@ -630,7 +651,7 @@ app.post('/api/shift-checkout', authRequired, async (req, res) => {
       date: t.date,
       time: t.time,
       duration: result.duration,
-      forced: isForced
+      isForced
     }).catch(() => {});
     return res.json(result);
   } catch (err) {
