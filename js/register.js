@@ -51,8 +51,8 @@
       if (window.Swal) Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกให้ครบทุกช่อง', 'warning');
       return;
     }
-    if (password.length < 4) {
-      if (window.Swal) Swal.fire('รหัสผ่านสั้นเกินไป', 'อย่างน้อย 4 ตัวอักษร', 'warning');
+    if (password.length < 12) {
+      if (window.Swal) Swal.fire('รหัสผ่านสั้นเกินไป', 'อย่างน้อย 12 ตัวอักษร', 'warning');
       return;
     }
     if (password !== password2) {

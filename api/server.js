@@ -14,6 +14,7 @@ const jwt = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
 
 const app = express();
+app.disable('x-powered-by');
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES = '12h';
@@ -22,8 +23,8 @@ if (!process.env.DATABASE_URL) {
   console.error('❌ ไม่พบ DATABASE_URL ใน .env');
   process.exit(1);
 }
-if (!JWT_SECRET || JWT_SECRET.length < 16) {
-  console.error('❌ ตั้ง JWT_SECRET ใน .env ให้ยาวอย่างน้อย 16 ตัวอักษร');
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  console.error('❌ ตั้ง JWT_SECRET ใน .env ให้ยาวอย่างน้อย 32 ตัวอักษร');
   process.exit(1);
 }
 
@@ -44,7 +45,7 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) return cb(null, true);
     return cb(new Error('Not allowed by CORS'));
   },
-  credentials: true
+  credentials: false
 }));
 
 app.use(express.json({ limit: '100kb' }));
@@ -121,15 +122,33 @@ function signToken(user) {
   );
 }
 
-function authRequired(req, res, next) {
+async function authRequired(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'ต้องเข้าสู่ระบบก่อน' });
+
+  let claims;
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
-    next();
+    claims = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
   } catch {
     return res.status(401).json({ error: 'โทเคนหมดอายุหรือไม่ถูกต้อง' });
+  }
+
+  // Reload privileges on every request so role changes apply immediately.
+  try {
+    const rows = await sql`
+      SELECT username, role, is_admin AS "isAdmin",
+             can_view_monitoring AS "canViewMonitoring"
+      FROM users WHERE username = ${claims.sub} LIMIT 1
+    `;
+    if (!rows.length) return res.status(401).json({ error: 'บัญชีนี้ไม่มีอยู่หรือถูกปิดใช้งาน' });
+    const user = rows[0];
+    req.user = { ...claims, sub: user.username, role: user.role,
+      isAdmin: !!user.isAdmin, canViewMonitoring: !!user.canViewMonitoring };
+    return next();
+  } catch (err) {
+    console.error('Authentication user lookup failed:', err);
+    return res.status(503).json({ error: 'ไม่สามารถตรวจสอบสิทธิ์ได้ในขณะนี้' });
   }
 }
 

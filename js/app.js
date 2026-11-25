@@ -1,9 +1,3 @@
-const users = {
-    "talos blackagency": "001",
-    "noelle blackagency": "002",
-    "jane doe": "003"
-};
-
 const userProfiles = {
     "talos blackagency": { name: "Talos Blackagency", role: "ผู้อำนวยการแพทย์", avatar: "assets/images/talos.jpg", isAdmin: true, canViewMonitoring: true, desc: "ควบคุมและตรวจสอบทีมเวร" },
     "noelle blackagency": { name: "Noelle Blackagency", role: "รองผู้อำนวยการแพทย์", avatar: "assets/images/noeele.jpg", isAdmin: false, canViewMonitoring: false, desc: "สนับสนุนงานประสานงาน" },
@@ -1655,7 +1649,9 @@ function bindDashboardEvents() {
 
 async function initDashboard() {
     currentUser = sessionStorage.getItem('loggedInUser') || sessionStorage.getItem('medicUser');
-    if (!currentUser) {
+    const hasApiToken = typeof getToken === 'function' && !!getToken();
+    if (!currentUser || !hasApiToken) {
+        if (typeof clearSession === 'function') clearSession();
         window.location.href = 'index.html';
         return;
     }
@@ -1714,29 +1710,33 @@ function handleLogin(e) {
     const usernameInput = document.getElementById('usernameInput');
     const passwordInput = document.getElementById('passwordInput');
     const btn = document.getElementById('btnLogin');
-    const username = usernameInput.value.trim().toLowerCase();
-    const password = passwordInput.value;
-    if (users[username] && users[username] === password) {
-        sessionStorage.setItem('loggedInUser', username);
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> กำลังเข้าสู่ระบบ...';
-        }
-        celebrate({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ['#22c55e', '#2563eb', '#a78bfa'] });
-        setTimeout(() => {
-            window.location.href = 'dashboard.html';
-        }, 900);
+    const username = (usernameInput?.value || '').trim().toLowerCase();
+    const password = passwordInput?.value || '';
+
+    if (typeof apiLogin !== 'function') {
+        showAlert('ระบบยืนยันตัวตนไม่พร้อม', 'ไม่พบ API client — กรุณารีเฟรชหน้าเว็บหรือติดต่อผู้ดูแลระบบ', 'error');
         return;
     }
-    const page = document.getElementById('loginPage') || document.querySelector('.login-page');
-    page?.classList.add('shake');
-    setTimeout(() => page?.classList.remove('shake'), 500);
-    [usernameInput, passwordInput].forEach((input) => {
-        input.classList.add('input-error');
-        setTimeout(() => input.classList.remove('input-error'), 700);
-    });
-    showAlert('เข้าสู่ระบบไม่สำเร็จ', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error');
-    passwordInput.value = '';
+    if (!username || !password) {
+        showAlert('ข้อมูลไม่ครบ', 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', 'warning');
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+    apiLogin(username, password)
+        .then((result) => {
+            sessionStorage.setItem('loggedInUser', result.username);
+            if (result.profile && typeof userProfiles !== 'undefined') userProfiles[result.username] = result.profile;
+            window.location.href = 'dashboard.html';
+        })
+        .catch((err) => {
+            const page = document.getElementById('loginPage') || document.querySelector('.login-page');
+            page?.classList.add('shake');
+            setTimeout(() => page?.classList.remove('shake'), 500);
+            showAlert('เข้าสู่ระบบไม่สำเร็จ', err.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error');
+            if (passwordInput) passwordInput.value = '';
+        })
+        .finally(() => { if (btn) btn.disabled = false; });
 }
 
 function initPage() {

@@ -16,6 +16,7 @@ const jwt = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
 
 const app = express();
+app.disable('x-powered-by');
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const JWT_EXPIRES = '12h';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
@@ -26,8 +27,8 @@ const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID || '';
 if (!process.env.DATABASE_URL) {
   console.error('Missing DATABASE_URL');
 }
-if (!JWT_SECRET || JWT_SECRET.length < 16) {
-  console.error('Missing or short JWT_SECRET');
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  console.error('Missing or weak JWT_SECRET (minimum 32 characters)');
 }
 
 const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null;
@@ -39,13 +40,12 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
 
 app.use(cors({
   origin(origin, cb) {
-    if (!origin) return cb(null, true);
-    if (!allowedOrigins.length || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-      return cb(null, true);
-    }
-    return cb(new Error('Not allowed by CORS'));
+    // Same-origin and server-to-server requests may not send Origin.
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    // Fail closed: an empty allow-list or wildcard must not open browser access.
+    return cb(null, false);
   },
-  credentials: true
+  credentials: false
 }));
 
 app.use(express.json({ limit: '100kb' }));
@@ -91,15 +91,36 @@ function signToken(user) {
   );
 }
 
-function authRequired(req, res, next) {
+async function authRequired(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'ต้องเข้าสู่ระบบก่อน' });
+  if (!JWT_SECRET || JWT_SECRET.length < 32 || !sql) {
+    return res.status(503).json({ error: 'ระบบยืนยันตัวตนยังไม่พร้อม' });
+  }
+
+  let claims;
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
-    next();
+    claims = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
   } catch {
     return res.status(401).json({ error: 'โทเคนหมดอายุหรือไม่ถูกต้อง' });
+  }
+
+  // Permissions are reloaded for every request so role changes take effect immediately.
+  try {
+    const rows = await sql`
+      SELECT username, role, is_admin AS "isAdmin",
+             can_view_monitoring AS "canViewMonitoring"
+      FROM users WHERE username = ${claims.sub} LIMIT 1
+    `;
+    if (!rows.length) return res.status(401).json({ error: 'บัญชีนี้ไม่มีอยู่หรือถูกปิดใช้งาน' });
+    const user = rows[0];
+    req.user = { ...claims, sub: user.username, role: user.role,
+      isAdmin: !!user.isAdmin, canViewMonitoring: !!user.canViewMonitoring };
+    return next();
+  } catch (err) {
+    console.error('Authentication user lookup failed:', err);
+    return res.status(503).json({ error: 'ไม่สามารถตรวจสอบสิทธิ์ได้ในขณะนี้' });
   }
 }
 
@@ -252,7 +273,7 @@ app.post('/api/register', loginLimiter, async (req, res) => {
       return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ' });
     }
     if (uname.length < 3) return res.status(400).json({ error: 'ชื่อผู้ใช้สั้นเกินไป' });
-    if (pass.length < 4) return res.status(400).json({ error: 'รหัสผ่านอย่างน้อย 4 ตัว' });
+    if (pass.length < 12) return res.status(400).json({ error: 'รหัสผ่านอย่างน้อย 12 ตัวอักษร' });
     if (!/^[a-z0-9._\- ]+$/i.test(uname)) {
       return res.status(400).json({ error: 'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษร ตัวเลข . _ - และเว้นวรรค' });
     }
@@ -323,8 +344,8 @@ app.post('/api/user-role', authRequired, async (req, res) => {
 app.post('/api/login', loginLimiter, async (req, res) => {
   try {
     if (!needDb(res)) return;
-    if (!JWT_SECRET || JWT_SECRET.length < 16) {
-      return res.status(503).json({ error: 'ยังไม่ได้ตั้งค่า JWT_SECRET' });
+    if (!JWT_SECRET || JWT_SECRET.length < 32) {
+      return res.status(503).json({ error: 'ยังไม่ได้ตั้งค่า JWT_SECRET ที่ปลอดภัย (อย่างน้อย 32 ตัวอักษร)' });
     }
     const { username, password } = req.body || {};
     if (!username || !password) {

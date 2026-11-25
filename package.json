@@ -12,5 +12,13 @@
     "express-rate-limit": "^7.4.1",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "check": "node scripts/check-syntax.cjs",
+    "test": "node --test",
+    "verify": "npm run check && npm test"
   }
 }
