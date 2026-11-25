@@ -126,14 +126,57 @@ function saveDoctorsLocal() {
     saveJSON(DOCTORS_LOCAL_KEY, doctors);
 }
 
-function loadStockWithdrawals() {
-    if (!canViewMonitoring(currentUser)) return;
-    stockWithdrawals = loadJSON(STOCK_WITHDRAWALS_LOCAL_KEY, []);
-    if (!Array.isArray(stockWithdrawals)) stockWithdrawals = [];
+async function loadStockWithdrawals() {
+    if (!canViewMonitoring(currentUser)) {
+        stockWithdrawals = [];
+        return stockWithdrawals;
+    }
+    if (typeof apiLoadStockWithdrawals !== 'function') {
+        throw new Error('ไม่พบ API สำหรับโหลดประวัติสต็อก');
+    }
+    const rows = await apiLoadStockWithdrawals();
+    stockWithdrawals = Array.isArray(rows) ? rows : [];
+    return stockWithdrawals;
 }
 
 function saveStockWithdrawalsLocal() {
     saveJSON(STOCK_WITHDRAWALS_LOCAL_KEY, stockWithdrawals);
+}
+
+function renderStockWithdrawals() {
+    const list = document.getElementById('stockHistoryList');
+    if (!list) return;
+
+    const entries = Array.isArray(stockWithdrawals) ? stockWithdrawals : [];
+    const summary = document.getElementById('stockHistorySummary');
+    if (summary) summary.textContent = `ทั้งหมด ${entries.length.toLocaleString('th-TH')} รายการ`;
+
+    if (!entries.length) {
+        list.innerHTML = '<div class="fund-history-empty">ยังไม่มีประวัติการเบิกหรือเติมสต็อก</div>';
+        return;
+    }
+
+    list.innerHTML = entries.map((entry) => {
+        const isAdd = entry.isAdd === true;
+        const action = isAdd ? 'เติมสต็อก' : 'เบิก/ใช้สต็อก';
+        const actor = userProfiles[entry.username]?.name || entry.username || 'ไม่ระบุ';
+        const requester = entry.requester || (isAdd ? '-' : 'ไม่ระบุ');
+        const quantity = Number(entry.quantity) || 0;
+        const price = Number(entry.price) || 0;
+        const priceLabel = price > 0 ? ` • ราคา/ชิ้น ${price.toLocaleString('th-TH')} บาท` : '';
+        return `
+            <div class="fund-history-item">
+                <div>
+                    <strong>${action} · ${escapeHtml(entry.stockName || 'รายการสต็อก')}</strong>
+                    <span>ผู้ทำรายการ: ${escapeHtml(actor)} · ผู้เบิก: ${escapeHtml(requester)}</span>
+                </div>
+                <div class="fund-history-meta">
+                    <strong>${isAdd ? '+' : '−'}${quantity.toLocaleString('th-TH')} ชิ้น</strong>
+                    <span>${escapeHtml(entry.date || '-')} ${escapeHtml(entry.time || '-')}${priceLabel}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 function escapeHtml(text) {
@@ -549,7 +592,19 @@ function renderStock() {
                     : '<span class="stock-ok">✔ สต็อกเพียงพอ</span>'}
             </div>
             <div class="stock-item-actions">
-                ${isManager ? `<button class="btn btn-secondary btn-small stock-adjust" data-id="${item.id}" data-delta="1" type="button">＋ เติมสต็อก</button>` : ''}
+                ${isManager ? `
+                    <label class="stock-status-control">
+                        <span class="stock-meta">สถานะ</span>
+                        <select class="stock-status-select" data-id="${item.id}" aria-label="เปลี่ยนสถานะ ${escapeHtml(item.name)}">
+                            <option value="auto" ${(item.manualStatus || 'auto') === 'auto' ? 'selected' : ''}>อัตโนมัติ</option>
+                            <option value="ready" ${item.manualStatus === 'ready' ? 'selected' : ''}>พร้อมใช้งาน</option>
+                            <option value="ordered" ${item.manualStatus === 'ordered' ? 'selected' : ''}>สั่งซื้อแล้ว</option>
+                            <option value="waiting" ${item.manualStatus === 'waiting' ? 'selected' : ''}>รอรับของ</option>
+                            <option value="damaged" ${item.manualStatus === 'damaged' ? 'selected' : ''}>ชำรุด</option>
+                        </select>
+                    </label>
+                    <button class="btn btn-secondary btn-small stock-adjust" data-id="${item.id}" data-delta="1" type="button">＋ เติมสต็อก</button>
+                ` : ''}
                 <button class="btn btn-secondary btn-small stock-adjust" data-id="${item.id}" data-delta="-1" type="button" ${Number(item.quantity) <= 0 ? 'disabled' : ''}>− ใช้/เบิก</button>
                 ${isManager ? `<button class="btn btn-danger btn-small stock-remove" data-id="${item.id}" type="button">ลบ</button>` : ''}
             </div>
@@ -748,13 +803,25 @@ async function promptAdjustStock(id, direction) {
 }
 
 async function handleStockStatusChange(id, newStatus) {
+    const allowed = ['auto', 'ready', 'ordered', 'waiting', 'damaged'];
     const item = stockItems.find((s) => String(s.id) === String(id));
-    if (!item) return;
-    item.manualStatus = newStatus;
-    saveStockLocal();
-    renderStock();
-    const statusLabel = { auto: 'อัตโนมัติ', ready: 'พร้อมใช้งาน', ordered: 'สั่งซื้อแล้ว', waiting: 'รอรับของ', damaged: 'ชำรุด' };
-    showAlert('อัปเดตสถานะแล้ว', `${escapeHtml(item.name)} → ${statusLabel[newStatus] || newStatus}`, 'success');
+    if (!item || !allowed.includes(newStatus)) return;
+
+    const selector = Array.from(document.querySelectorAll('.stock-status-select'))
+        .find((element) => String(element.dataset.id) === String(id));
+    if (selector) selector.disabled = true;
+    try {
+        if (typeof apiUpdateStock !== 'function') throw new Error('ไม่พบ API สำหรับบันทึกสถานะสต็อก');
+        await apiUpdateStock(id, { manualStatus: newStatus });
+        stockItems = await apiLoadStock();
+        renderStock();
+        const statusLabel = { auto: 'อัตโนมัติ', ready: 'พร้อมใช้งาน', ordered: 'สั่งซื้อแล้ว', waiting: 'รอรับของ', damaged: 'ชำรุด' };
+        showAlert('อัปเดตสถานะแล้ว', `${escapeHtml(item.name)} → ${statusLabel[newStatus]}`, 'success');
+    } catch (err) {
+        try { stockItems = await apiLoadStock(); } catch (_) {}
+        renderStock();
+        showAlert('อัปเดตสถานะไม่สำเร็จ', err.message || 'กรุณาลองใหม่', 'error');
+    }
 }
 
 async function confirmRemoveStock(id) {
@@ -1605,7 +1672,9 @@ function handleMenuSwitch(event) {
         }
     });
     if (target === 'stockHistorySection') {
-        loadStockWithdrawals().then(renderStockWithdrawals);
+        loadStockWithdrawals()
+            .then(renderStockWithdrawals)
+            .catch((err) => showAlert('โหลดประวัติสต็อกไม่สำเร็จ', err.message || 'กรุณาลองใหม่', 'error'));
     }
     if (target === 'intelSection' && typeof setupIntelAdmin === 'function') {
         setupIntelAdmin();
