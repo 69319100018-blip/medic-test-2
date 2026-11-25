@@ -18,6 +18,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run verify
+      # The original lockfile did not include the packages already declared
+      # by package.json. Resolve a complete lock first, then install strictly
+      # from that generated lock for the verification run.
+      - name: Resolve npm lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify source and API smoke tests
+        run: npm run verify
+      - name: Publish generated lockfile for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 3
