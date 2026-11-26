@@ -250,6 +250,25 @@
                         <div class="current-duty-empty"><span class="current-duty-spinner"></span> กำลังโหลดรายชื่อผู้เข้าเวร...</div>
                     </div>
                     <div class="current-duty-footer"><i class="bi bi-arrow-repeat"></i> อัปเดตอัตโนมัติทุก 30 วินาที <span id="currentDutyUpdated"></span></div>
+                <section class="google-sheets-panel" id="googleSheetsPanel" aria-labelledby="googleSheetsTitle">
+                    <div class="google-sheets-header">
+                        <div class="google-sheets-heading">
+                            <span class="google-sheets-icon"><i class="bi bi-file-earmark-spreadsheet"></i></span>
+                            <div>
+                                <h3 id="googleSheetsTitle">Google Sheets ส่วนตัว</h3>
+                                <p>สำรองบันทึกเวลาเวรของคุณไปยัง Google Drive ส่วนตัว</p>
+                            </div>
+                        </div>
+                        <span class="google-sheets-badge disconnected" id="googleSheetsBadge">ยังไม่เชื่อมต่อ</span>
+                    </div>
+                    <div class="google-sheets-status" id="googleSheetsStatus" aria-live="polite">กำลังตรวจสอบสถานะการเชื่อมต่อ...</div>
+                    <div class="google-sheets-actions">
+                        <button type="button" class="btn btn-primary" id="btnGoogleSheetsConnect"><i class="bi bi-google"></i> เชื่อมต่อ Google</button>
+                        <a class="google-sheets-open hidden" id="lnkGoogleSheetsOpen" href="#" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right"></i> เปิด Google Sheet</a>
+                        <button type="button" class="btn btn-secondary hidden" id="btnGoogleSheetsRetry"><i class="bi bi-arrow-repeat"></i> ซิงก์รายการที่ค้าง</button>
+                        <button type="button" class="btn btn-danger hidden" id="btnGoogleSheetsDisconnect"><i class="bi bi-link-45deg"></i> ยกเลิกการเชื่อมต่อ</button>
+                    </div>
+                    <p class="google-sheets-footnote" id="googleSheetsFootnote">ไฟล์จะถูกสร้างใน Google Drive ของบัญชีที่คุณเชื่อมต่อเท่านั้น</p>
                 </section>
             </section>
 
