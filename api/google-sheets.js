@@ -493,6 +493,23 @@ async function syncAllWeeklyTabsForConnection(sql, connection) {
   }
 }
 
+async function safeGoogleEnsureCurrentWeek(sql, username) {
+  try {
+    const rows = await sql`
+      SELECT username, refresh_token_encrypted, spreadsheet_id, status
+      FROM public.google_sheets_connections
+      WHERE username = ${username} AND status = 'connected'
+      LIMIT 1
+    `;
+    if (!rows.length) return { status: 'not_connected' };
+    await scheduleBackground(() => syncCurrentWeekForConnection(sql, rows[0]));
+    return { status: 'scheduled' };
+  } catch (err) {
+    console.error('Google Sheets current-week setup could not be scheduled:', err.code || err.name || 'unknown');
+    return { status: 'pending' };
+  }
+}
+
 async function safeGoogleRefreshUserSheets(sql, username) {
   try {
     const rows = await sql`
@@ -668,15 +685,7 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
       `;
       const c = rows[0] || null;
       if (c?.status === 'connected') {
-        const connections = await sql`
-          SELECT username, refresh_token_encrypted, spreadsheet_id, status
-          FROM public.google_sheets_connections
-          WHERE username = ${req.user.sub} AND status = 'connected'
-          LIMIT 1
-        `;
-        if (connections.length) {
-          await scheduleBackground(() => syncCurrentWeekForConnection(sql, connections[0]));
-        }
+        await safeGoogleEnsureCurrentWeek(sql, req.user.sub);
       }
       return res.json({
         configured: !!(cfg.clientId && cfg.clientSecret && cfg.encryptionKey),
