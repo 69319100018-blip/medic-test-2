@@ -5087,3 +5087,65 @@ body.dashboard-body.theme-dark::after {
   color: var(--app-text-muted);
   font-size: .75rem;
 }
+
+
+/* Member / Role layout fix — keep identity and payroll grade readable. */
+.page-dashboard #membersList {
+  display: grid !important;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)) !important;
+  align-items: stretch;
+  gap: 14px;
+}
+
+.page-dashboard #membersList > .payroll-member-card {
+  width: 100%;
+  min-width: 0;
+  min-height: 132px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, .8fr);
+  align-items: center;
+  gap: 18px;
+  margin: 0;
+  padding: 18px;
+}
+
+.page-dashboard .payroll-member-identity,
+.page-dashboard .payroll-grade-readonly {
+  min-width: 0;
+}
+
+.page-dashboard .payroll-member-identity strong {
+  display: block;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.page-dashboard .payroll-member-identity span {
+  display: block;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.page-dashboard .payroll-grade-readonly {
+  width: 100%;
+  min-height: 76px;
+}
+
+.page-dashboard .payroll-grade-readonly strong {
+  line-height: 1.4;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+@media (max-width: 900px) {
+  .page-dashboard #membersList {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .page-dashboard #membersList > .payroll-member-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
