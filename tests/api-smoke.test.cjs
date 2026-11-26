@@ -352,12 +352,18 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
   assert.match(source, /DATE_TRUNC\('week', NOW\(\) AT TIME ZONE 'Asia\/Bangkok'\)/);
   assert.match(source, /registeredDate/);
   assert.match(source, /date < profile\.registeredDate/);
-  assert.match(source, /J3\*24\*O3/);
-  assert.match(source, /J3\*24>=21/);
+  assert.match(source, /totalSeconds/);
+  assert.match(source, /totalHours/);
+  assert.match(source, /totalMoney/);
+  assert.match(source, /profile\.payroll\?\.matched/);
+  assert.doesNotMatch(source, /J3\*24\*O3|J3\*24>=21/);
   assert.match(source, /startColumnIndex: 11, endColumnIndex: 12/);
   assert.match(source, /startColumnIndex: 12, endColumnIndex: 13/);
+  assert.match(source, /startColumnIndex: 1, endColumnIndex: 12/);
+  assert.match(source, /startColumnIndex: 13, endColumnIndex: 15/);
   assert.match(source, /syncCurrentWeekForConnection/);
   assert.match(source, /addProtectedRange/);
+  assert.match(source, /WEEKLY_DATA_PROTECTION_DESCRIPTION/);
   assert.match(source, /WEEKLY_RANK_PROTECTION_DESCRIPTION/);
   assert.match(source, /RANK_PROTECTION_DESCRIPTION/);
   assert.match(source, /getPayrollInfoForRole\(profile\.role\)/);
@@ -373,6 +379,7 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
     sourceRole: 'นักเรียนแพทย์', grade: 'นักเรียนแพทย์', rate: 27000, matched: true
   });
   assert.equal(payroll.getPayrollInfoForRole('ผู้อำนวยการแพทย์').rate, 45000);
+  assert.equal(payroll.getPayrollInfoForRole('Test 7 Day').grade, 'Test 7 Day');
   assert.equal(payroll.getPayrollInfoForRole('แอดมินแพทย์').matched, false);
   assert.equal(payroll.getPayrollInfoForRole('แอดมินแพทย์').rate, null);
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
