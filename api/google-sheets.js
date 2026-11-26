@@ -140,8 +140,6 @@ const PAY_GRADE_RATES = [
   { grade: 'Test 7 Day', rate: 10000, note: 'แพทย์ใหม่ / ฝึกหัด ระยะ 7 วัน' },
   { grade: 'แพทย์อาสา', rate: 10000, note: 'แพทย์อาสา' },
   { grade: 'ผู้ช่วย/เลขา', rate: 30000, note: 'ผู้ช่วย / เลขา' },
-  { grade: 'โบรัสรันคิว', rate: 45000, note: 'โบรัสรันคิว' },
-  { grade: 'ไปสตอรี่', rate: 30000, note: 'ไปสตอรี่' }
 ];
 const PAY_GRADE_OPTIONS = PAY_GRADE_RATES.map((item) => item.grade);
 const RANK_TAB = 'ยศ';
@@ -292,7 +290,7 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
       '=J3*24>=21',
       false,
       '',
-      "=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$11,2,FALSE),\"\")"
+      "=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$9,2,FALSE),\"\")"
     ];
     await updateSheetValues(
       token,
@@ -461,7 +459,7 @@ async function syncWeeklyWeek(sql, token, connection, profile, weekStart) {
   ]]);
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'N3:O3'), [[
     profile.payGrade || '',
-    "=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$11,2,FALSE),\"\")"
+    "=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$9,2,FALSE),\"\")"
   ]]);
 }
 
