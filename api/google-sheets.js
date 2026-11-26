@@ -150,6 +150,32 @@ async function syncShift(sql, connection, id) {
       { values: [row] });
   }
 }
+async function scheduleBackground(task) {
+  if (process.env.VERCEL) {
+    try {
+      const { waitUntil } = await import('@vercel/functions');
+      const work = Promise.resolve().then(task).catch((err) => {
+        console.error('Google Sheets background task failed:', err.code || err.name || 'unknown');
+      });
+      waitUntil(work);
+      return 'scheduled';
+    } catch (err) {
+      console.error('Google Sheets background scheduling unavailable:', err.code || err.name || 'unknown');
+    }
+  }
+  await task();
+  return 'completed';
+}
+
+async function drainQueuedJob(sql, id, maxPasses = 3) {
+  let result = { status: 'skipped' };
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    result = await processJob(sql, id);
+    if (result.status !== 'rerun') return result;
+  }
+  return { status: 'pending' };
+}
+
 async function processJob(sql, id) {
   const claimed = await sql`
     UPDATE public.google_sheets_sync_jobs
@@ -165,29 +191,46 @@ async function processJob(sql, id) {
       FROM public.google_sheets_connections WHERE username = ${job.username} LIMIT 1
     `;
     await syncShift(sql, connections[0], job.shiftLogId);
-    await sql`
+    const completed = await sql`
       UPDATE public.google_sheets_sync_jobs
-      SET status = 'synced', last_error = NULL, synced_at = NOW(), updated_at = NOW()
-      WHERE id = ${job.id}
+      SET status = CASE WHEN rerun_requested THEN 'pending' ELSE 'synced' END,
+          attempts = CASE WHEN rerun_requested THEN 0 ELSE attempts END,
+          next_attempt_at = CASE WHEN rerun_requested THEN NOW() ELSE next_attempt_at END,
+          last_error = NULL,
+          synced_at = CASE WHEN rerun_requested THEN NULL ELSE NOW() END,
+          rerun_requested = FALSE,
+          updated_at = NOW()
+      WHERE id = ${job.id} AND status = 'running'
+      RETURNING status
     `;
+    if (!completed.length) return { status: 'skipped' };
     await sql`
       UPDATE public.google_sheets_connections
       SET last_synced_at = NOW(), last_error = NULL, updated_at = NOW()
       WHERE username = ${job.username}
     `;
-    return { status: 'synced' };
+    return { status: completed[0].status === 'pending' ? 'rerun' : 'synced' };
   } catch (err) {
     const attempts = Number(job.attempts || 0) + 1;
     const reconnect = !!err.requiresReconnect || err.code === 'invalid_grant';
     const terminal = reconnect || !!err.terminal || attempts >= MAX_ATTEMPTS;
     const message = String(err.message || 'Google Sheets sync failed').slice(0, 400);
-    await sql`
+    const failed = await sql`
       UPDATE public.google_sheets_sync_jobs
-      SET status = ${terminal ? 'failed' : 'pending'},
-          attempts = ${attempts},
-          next_attempt_at = NOW() + (${Math.min(60, 2 ** attempts)} * INTERVAL '1 minute'),
+      SET status = CASE
+            WHEN rerun_requested AND NOT ${terminal} THEN 'pending'
+            WHEN ${terminal} THEN 'failed'
+            ELSE 'pending'
+          END,
+          attempts = CASE WHEN rerun_requested AND NOT ${terminal} THEN 0 ELSE ${attempts} END,
+          next_attempt_at = CASE
+            WHEN rerun_requested AND NOT ${terminal} THEN NOW()
+            ELSE NOW() + (${Math.min(60, 2 ** attempts)} * INTERVAL '1 minute')
+          END,
+          rerun_requested = FALSE,
           last_error = ${message}, updated_at = NOW()
-      WHERE id = ${job.id}
+      WHERE id = ${job.id} AND status = 'running'
+      RETURNING status, attempts
     `;
     await sql`
       UPDATE public.google_sheets_connections
@@ -196,7 +239,8 @@ async function processJob(sql, id) {
       WHERE username = ${job.username}
     `;
     console.error('Google Sheets sync failed:', job.username, err.code || err.status || 'unknown');
-    return { status: terminal ? 'failed' : 'pending' };
+    if (!failed.length) return { status: 'skipped' };
+    return { status: failed[0].status === 'pending' && Number(failed[0].attempts) === 0 ? 'rerun' : failed[0].status };
   }
 }
 async function safeGoogleQueueShift(sql, username, shiftLogId) {
@@ -207,12 +251,20 @@ async function safeGoogleQueueShift(sql, username, shiftLogId) {
       INSERT INTO public.google_sheets_sync_jobs (username, shift_log_id)
       VALUES (${username}, ${shiftLogId})
       ON CONFLICT (shift_log_id) DO UPDATE
-        SET status = 'pending', attempts = 0, next_attempt_at = NOW(),
-            last_error = NULL, synced_at = NULL, updated_at = NOW()
-        WHERE public.google_sheets_sync_jobs.status <> 'running'
-      RETURNING id
+        SET status = CASE WHEN public.google_sheets_sync_jobs.status = 'running' THEN 'running' ELSE 'pending' END,
+            rerun_requested = public.google_sheets_sync_jobs.status = 'running',
+            attempts = CASE WHEN public.google_sheets_sync_jobs.status = 'running' THEN public.google_sheets_sync_jobs.attempts ELSE 0 END,
+            next_attempt_at = CASE WHEN public.google_sheets_sync_jobs.status = 'running' THEN public.google_sheets_sync_jobs.next_attempt_at ELSE NOW() END,
+            last_error = CASE WHEN public.google_sheets_sync_jobs.status = 'running' THEN public.google_sheets_sync_jobs.last_error ELSE NULL END,
+            synced_at = CASE WHEN public.google_sheets_sync_jobs.status = 'running' THEN public.google_sheets_sync_jobs.synced_at ELSE NULL END,
+            updated_at = NOW()
+      RETURNING id, status
     `;
-    // Keep check-in/out responses independent of Google availability; the cron worker processes this queue.
+    const job = jobs[0];
+    if (job?.status === 'pending') {
+      // Vercel waitUntil keeps the sync alive after the attendance response is returned.
+      await scheduleBackground(() => drainQueuedJob(sql, job.id));
+    }
     return { status: 'pending' };
   } catch (err) {
     console.error('Google Sheets queue failed:', err.code || err.name || 'unknown');
@@ -254,12 +306,12 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
       await sql`DELETE FROM public.google_sheets_oauth_states WHERE expires_at < NOW()`;
       await sql`
         INSERT INTO public.google_sheets_oauth_states (state_hash, username, code_verifier, expires_at)
-        VALUES (${hash(state)}, ${req.user.sub}, ${verifier}, NOW() + INTERVAL '10 minutes')
+        VALUES (${sha(state)}, ${req.user.sub}, ${verifier}, NOW() + INTERVAL '10 minutes')
       `;
       const params = new URLSearchParams({
         client_id: cfg.clientId, redirect_uri: cfg.redirectUri, response_type: 'code',
         scope: SCOPES.join(' '), access_type: 'offline', prompt: 'consent',
-        include_granted_scopes: 'true', state, code_challenge: hash(verifier),
+        include_granted_scopes: 'true', state, code_challenge: sha(verifier),
         code_challenge_method: 'S256'
       });
       return res.json({ url: 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString() });
@@ -274,7 +326,7 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
       if (!/^[A-Za-z0-9_-]{32,100}$/.test(state)) return redirect('invalid_state');
       const states = await sql`
         DELETE FROM public.google_sheets_oauth_states
-        WHERE state_hash = ${hash(state)} AND expires_at > NOW()
+        WHERE state_hash = ${sha(state)} AND expires_at > NOW()
         RETURNING username, code_verifier AS "codeVerifier"
       `;
       const s = states[0];
@@ -335,10 +387,24 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
           ORDER BY created_at DESC LIMIT 500
         ) history
         ON CONFLICT (shift_log_id) DO UPDATE SET
-          status = 'pending', attempts = 0, next_attempt_at = NOW(),
-          last_error = NULL, synced_at = NULL, updated_at = NOW()
-        WHERE public.google_sheets_sync_jobs.status <> 'running'
+          status = CASE WHEN public.google_sheets_sync_jobs.status = 'running' THEN 'running' ELSE 'pending' END,
+          rerun_requested = public.google_sheets_sync_jobs.status = 'running',
+          attempts = CASE WHEN public.google_sheets_sync_jobs.status = 'running' THEN public.google_sheets_sync_jobs.attempts ELSE 0 END,
+          next_attempt_at = CASE WHEN public.google_sheets_sync_jobs.status = 'running' THEN public.google_sheets_sync_jobs.next_attempt_at ELSE NOW() END,
+          last_error = CASE WHEN public.google_sheets_sync_jobs.status = 'running' THEN public.google_sheets_sync_jobs.last_error ELSE NULL END,
+          synced_at = CASE WHEN public.google_sheets_sync_jobs.status = 'running' THEN public.google_sheets_sync_jobs.synced_at ELSE NULL END,
+          updated_at = NOW()
       `;
+      const firstBatch = await sql`
+        SELECT id FROM public.google_sheets_sync_jobs
+        WHERE username = ${s.username} AND status = 'pending'
+        ORDER BY created_at ASC LIMIT 10
+      `;
+      if (firstBatch.length) {
+        await scheduleBackground(async () => {
+          for (const job of firstBatch) await drainQueuedJob(sql, job.id);
+        });
+      }
       return redirect('connected');
     } catch (err) {
       console.error('Google OAuth callback failed:', err.code || err.status || err.name || 'unknown');
@@ -383,15 +449,18 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
       if (!c.length || c[0].status !== 'connected') return res.status(409).json({ error: 'กรุณาเชื่อมต่อ Google Sheets ก่อน' });
       const jobs = await sql`
         UPDATE public.google_sheets_sync_jobs
-        SET status = 'pending', attempts = 0, next_attempt_at = NOW(), last_error = NULL, updated_at = NOW()
-        WHERE username = ${req.user.sub} AND status = 'failed' RETURNING id
+        SET status = 'pending', attempts = 0, next_attempt_at = NOW(),
+            last_error = NULL, rerun_requested = FALSE, updated_at = NOW()
+        WHERE username = ${req.user.sub} AND status IN ('failed', 'pending')
+        RETURNING id
       `;
-      let processed = 0;
-      for (const job of jobs.slice(0, 10)) {
-        const result = await processJob(sql, job.id);
-        if (result.status !== 'skipped') processed += 1;
+      const batch = jobs.slice(0, 25);
+      if (batch.length) {
+        await scheduleBackground(async () => {
+          for (const job of batch) await drainQueuedJob(sql, job.id);
+        });
       }
-      return res.json({ ok: true, queued: jobs.length, processed });
+      return res.json({ ok: true, queued: jobs.length, scheduled: batch.length });
     } catch (err) { safeError(res, err); }
   });
 
@@ -402,7 +471,8 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
       if (!needDb(res)) return;
       await sql`
         UPDATE public.google_sheets_sync_jobs
-        SET status = 'pending', next_attempt_at = NOW(), updated_at = NOW()
+        SET status = 'pending', rerun_requested = FALSE, attempts = 0,
+            next_attempt_at = NOW(), updated_at = NOW()
         WHERE status = 'running' AND updated_at < NOW() - INTERVAL '10 minutes'
       `;
       const jobs = await sql`
@@ -412,7 +482,7 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
       `;
       let processed = 0;
       for (const job of jobs) {
-        const result = await processJob(sql, job.id);
+        const result = await drainQueuedJob(sql, job.id);
         if (result.status !== 'skipped') processed += 1;
       }
       return res.json({ ok: true, processed });
