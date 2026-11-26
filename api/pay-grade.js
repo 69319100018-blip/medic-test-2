@@ -15,7 +15,7 @@ function normalizeRole(value) {
   return String(value || '')
     .trim()
     .toLowerCase()
-    .replace(/[\\s.]/g, '');
+    .replace(/[\s.]/g, '');
 }
 
 // Match the exact role stored in public.users.role.
