@@ -354,6 +354,9 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
   assert.match(source, /date < profile\.registeredDate/);
   assert.match(source, /J3\*24\*O3/);
   assert.match(source, /J3\*24>=21/);
+  assert.match(source, /startColumnIndex: 11, endColumnIndex: 12/);
+  assert.match(source, /startColumnIndex: 12, endColumnIndex: 13/);
+  assert.match(source, /'ยศ'!\$A\$2:\$B\$11/);
   assert.match(source, /syncCurrentWeekForConnection/);
   assert.match(api, /pay_grade AS "payGrade"/);
   assert.match(api, /safeGoogleRefreshUserSheets\(sql, uname\)/);
