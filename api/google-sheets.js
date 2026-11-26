@@ -172,12 +172,16 @@ function thaiWeekdayLabel(value) {
 
 function weeklyTabName(weekStart) {
   return ('สัปดาห์ ' + thaiDateLabel(weekStart) + ' - ' + thaiDateLabel(addIsoDays(weekStart, 6)))
-    .replace(/[\\/:?*[\]]/g, '')
+    .replaceAll('\\\\', '').replaceAll('/', '').replaceAll(':', '').replaceAll('?', '').replaceAll('*', '').replaceAll('[', '').replaceAll(']', '')
     .slice(0, 99);
 }
 
 async function spreadsheetMetadata(token, spreadsheetId) {
   return sheetsCall(token, spreadsheetId, 'GET', '?fields=sheets.properties(sheetId,title)');
+}
+
+function sheetA1Range(title, cells) {
+  return "'" + String(title || '').replace(/'/g, "''") + "'!" + cells;
 }
 
 async function updateSheetValues(token, spreadsheetId, range, values, inputOption = 'USER_ENTERED') {
@@ -288,12 +292,12 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
       '=IF(J3*24>=21,"ครบ","ไม่ครบ")',
       false,
       '',
-      '=IFERROR(VLOOKUP(N3,ยศ!$A$2:$B$11,2,FALSE),"")'
+      '=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$11,2,FALSE),"")'
     ];
     await updateSheetValues(
       token,
       spreadsheetId,
-      weekTitle + '!A1:O3',
+      sheetA1Range(weekTitle, 'A1:O3'),
       [title, header, initialRow],
       'USER_ENTERED'
     );
@@ -442,14 +446,14 @@ async function syncWeeklyWeek(sql, token, connection, profile, weekStart) {
   });
   const tabs = await ensurePayrollTabs(token, connection.spreadsheet_id, weekStart);
   const title = tabs.weekTitle;
-  await updateSheetValues(token, connection.spreadsheet_id, title + '!C3:I3', [dailyValues]);
-  await updateSheetValues(token, connection.spreadsheet_id, title + '!B3:B3', [[profile.name || connection.username]]);
-  await updateSheetValues(token, connection.spreadsheet_id, title + '!J3:L3', [[
+  await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'C3:I3'), [dailyValues]);
+  await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'B3:B3'), [[profile.name || connection.username]]);
+  await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'J3:L3'), [[
     '=SUM(C3:I3)',
     '=IF(O3="","",J3*24*O3)',
     '=IF(J3*24>=21,"ครบ","ไม่ครบ")'
   ]]);
-  await updateSheetValues(token, connection.spreadsheet_id, title + '!N3:O3', [[
+  await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'N3:O3'), [[
     profile.payGrade || '',
     '=IFERROR(VLOOKUP(N3,ยศ!$A$2:$B$11,2,FALSE),"")'
   ]]);
@@ -657,6 +661,17 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
         FROM public.google_sheets_connections WHERE username = ${req.user.sub} LIMIT 1
       `;
       const c = rows[0] || null;
+      if (c?.status === 'connected') {
+        const connections = await sql`
+          SELECT username, refresh_token_encrypted, spreadsheet_id, status
+          FROM public.google_sheets_connections
+          WHERE username = ${req.user.sub} AND status = 'connected'
+          LIMIT 1
+        `;
+        if (connections.length) {
+          await scheduleBackground(() => syncCurrentWeekForConnection(sql, connections[0]));
+        }
+      }
       return res.json({
         configured: !!(cfg.clientId && cfg.clientSecret && cfg.encryptionKey),
         connected: !!c && c.status === 'connected',
@@ -774,9 +789,16 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
         WHERE username = ${s.username} AND status = 'pending'
         ORDER BY created_at ASC LIMIT 10
       `;
-      if (firstBatch.length) {
+      const connections = await sql`
+        SELECT username, refresh_token_encrypted, spreadsheet_id, status
+        FROM public.google_sheets_connections
+        WHERE username = ${s.username} AND status = 'connected'
+        LIMIT 1
+      `;
+      if (firstBatch.length || connections.length) {
         await scheduleBackground(async () => {
           for (const job of firstBatch) await drainQueuedJob(sql, job.id);
+          if (connections.length) await syncCurrentWeekForConnection(sql, connections[0]);
         });
       }
       return redirect('connected');
@@ -859,9 +881,27 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
         const result = await drainQueuedJob(sql, job.id);
         if (result.status !== 'skipped') processed += 1;
       }
-      return res.json({ ok: true, processed });
+      const connections = await sql`
+        SELECT username, refresh_token_encrypted, spreadsheet_id, status
+        FROM public.google_sheets_connections
+        WHERE status = 'connected' AND refresh_token_encrypted IS NOT NULL
+        ORDER BY username
+        LIMIT 100
+      `;
+      if (connections.length) {
+        await scheduleBackground(async () => {
+          for (const connection of connections) {
+            try {
+              await syncCurrentWeekForConnection(sql, connection);
+            } catch (err) {
+              console.error('Weekly Google Sheets rollover failed:', connection.username, err.code || err.status || err.name || 'unknown');
+            }
+          }
+        });
+      }
+      return res.json({ ok: true, processed, weeklyScheduled: connections.length });
     } catch (err) { safeError(res, err); }
   });
 }
 
-module.exports = { registerGoogleSheetsRoutes, safeGoogleQueueShift };
+module.exports = { registerGoogleSheetsRoutes, safeGoogleQueueShift, safeGoogleRefreshUserSheets, isValidPayGrade, PAY_GRADE_OPTIONS };
