@@ -5060,3 +5060,30 @@ body.dashboard-body.theme-dark::after {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+/* Read-only database-derived payroll rank */
+.page-dashboard .payroll-grade-readonly {
+  display: grid;
+  gap: 3px;
+  align-content: center;
+  min-width: 0;
+  padding: 10px 13px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface-muted);
+}
+.page-dashboard .payroll-grade-readonly span {
+  color: var(--app-text-muted);
+  font-size: .72rem;
+  font-weight: 700;
+}
+.page-dashboard .payroll-grade-readonly strong {
+  color: var(--app-text);
+  font-size: .9rem;
+  overflow-wrap: anywhere;
+}
+.page-dashboard .payroll-grade-readonly small {
+  color: var(--app-text-muted);
+  font-size: .75rem;
+}
