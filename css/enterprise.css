@@ -736,7 +736,7 @@ body.dashboard-body {
   grid-template-areas:
     "identity status"
     "actions tools"
-    "duty duty";
+    "duty duty"\n    "sheets sheets";
   gap: 18px 22px;
   align-items: center;
   padding: clamp(22px, 2.7vw, 34px);
@@ -1714,7 +1714,7 @@ body.dashboard-body {
 
   .page-dashboard .panel-profile {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "identity" "status" "actions" "tools" "duty";
+    grid-template-areas: "identity" "status" "actions" "tools" "duty" "sheets";
     gap: 14px;
   }
 
@@ -2598,7 +2598,7 @@ body {
     grid-template-areas:
       "identity status"
       "actions tools"
-      "duty duty";
+      "duty duty"\n      "sheets sheets";
     align-items: center;
   }
 
@@ -4926,7 +4926,7 @@ body.dashboard-body.theme-dark::after {
 
 /* Personal Google Sheets — private spreadsheet connection */
 .page-dashboard .google-sheets-panel {
-  grid-area: duty;
+  grid-area: sheets;
   min-width: 0;
   padding: 17px 18px 14px;
   border: 1px solid #d5e4ef;

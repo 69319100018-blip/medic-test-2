@@ -212,7 +212,8 @@ async function safeGoogleQueueShift(sql, username, shiftLogId) {
         WHERE public.google_sheets_sync_jobs.status <> 'running'
       RETURNING id
     `;
-    return jobs.length ? await processJob(sql, jobs[0].id) : { status: 'pending' };
+    // Keep check-in/out responses independent of Google availability; the cron worker processes this queue.
+    return { status: 'pending' };
   } catch (err) {
     console.error('Google Sheets queue failed:', err.code || err.name || 'unknown');
     return { status: 'pending' };
