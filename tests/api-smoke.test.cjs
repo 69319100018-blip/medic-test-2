@@ -298,6 +298,8 @@ test('Google Sheets integration isolates users and encrypts refresh tokens', () 
   assert.match(source, /https:\/\/www\.googleapis\.com\/auth\/drive\.file/);
   assert.match(source, /createCipheriv\('aes-256-gcm'/);
   assert.match(source, /code_challenge_method: 'S256'/);
+  assert.match(source, /const sha = \(value\) => crypto\.createHash\('sha256'\)/);
+  assert.doesNotMatch(source, /\bhash\s*\(/);
   assert.match(source, /access_type: 'offline'/);
   assert.match(source, /WHERE username = \$\{req\.user\.sub\}/);
   assert.match(source, /ON CONFLICT \(shift_log_id\)/);
@@ -338,9 +340,15 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
   assert.match(source, /WHERE username = \$\{req\.user\.sub\}/);
   assert.match(source, /ON CONFLICT \(shift_log_id\)/);
   assert.match(source, /app\.get\('\/api\/cron\/google-sheets-sync'/);
+  assert.match(source, /rerun_requested/);
+  assert.match(source, /import\('@vercel\/functions'\)/);
+  const deploymentConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'));
+  assert.equal(deploymentConfig.crons[0].schedule, '0 3 * * *');
   const statusStart = source.indexOf("app.get('/api/google-sheets/status'");
   const connectStart = source.indexOf("app.post('/api/google-sheets/connect'", statusStart);
   assert.doesNotMatch(source.slice(statusStart, connectStart), /refresh_token_encrypted/);
   assert.match(api, /safeGoogleQueueShift\(sql, username, inserted\[0\]\.id\)/);
   assert.match(api, /safeGoogleQueueShift\(sql, username, result\.shift_log_id\)/);
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  assert.ok(pkg.dependencies['@vercel/functions']);
 });
