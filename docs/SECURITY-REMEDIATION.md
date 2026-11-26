@@ -22,3 +22,11 @@ After credential rotation, the owner may choose to rewrite history with `git fil
 
 ## Production gate
 Do not declare production readiness until credentials are rotated, seed accounts are addressed, exact production origins are configured and integration/security tests pass.
+
+
+## Follow-up hardening
+- Vercel environment metadata shows `DATABASE_URL` scoped to Production, with Preview and Development disabled until an isolated non-production database is configured.
+- Keep `JWT_SECRET` as a Vercel encrypted/sensitive environment variable. Rotating it invalidates all current sessions.
+- Review `security_events` for legacy password upgrades and suspicious login activity.
+- The latest database audit found one remaining non-bcrypt legacy password hash. The application migrates it to bcrypt cost 12 after successful verification; prompt a password change for that account.
+- Do not treat frontend DevTools detection, key blocking or browser fingerprints as security boundaries.

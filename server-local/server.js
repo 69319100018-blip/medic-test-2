@@ -17,6 +17,12 @@ const defaultPort = process.env.PORT ? Number(process.env.PORT) : 3000;
 // Only unmatched paths reach this guard; source and configuration directories
 // are never exposed through the local static host.
 app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; script-src-attr 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; connect-src 'self'; media-src 'self' data: blob: https:; worker-src 'self' blob:");
   const pathname = req.path.toLowerCase();
 
   if (/^\/(?:api|server-local|docs|tests|scripts|\.github)(?:\/|$)/i.test(pathname)) {
@@ -41,10 +47,10 @@ app.use(express.static(publicRoot, {
   fallthrough: true,
   setHeaders(res, filePath) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
     if (path.extname(filePath) === '.html') {
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-store');
     } else {
       res.setHeader('Cache-Control', 'public, max-age=3600');
     }

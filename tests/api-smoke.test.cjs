@@ -201,3 +201,74 @@ test('current on-duty roster is authenticated and only queries open shifts for t
   assert.match(route, /INNER JOIN public\.users/);
   assert.doesNotMatch(route, /password_hash|review_note/);
 });
+
+
+test('security headers deny framing, inline scripts and cacheable API responses', async () => {
+  const response = await fetch(`${apiUrl}/api/health`);
+  const csp = response.headers.get('content-security-policy') || '';
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, /object-src 'none'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /script-src 'self' https:\/\/cdn\.jsdelivr\.net/);
+  assert.doesNotMatch(csp, /script-src[^;]*unsafe-inline/);
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  assert.match(response.headers.get('cache-control') || '', /no-store/);
+});
+
+test('logout is protected and sessions are revocable server-side', async () => {
+  const response = await fetch(`${apiUrl}/api/logout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}'
+  });
+  assert.equal(response.status, 401);
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  assert.match(source, /event_type = 'auth_session_issued'/);
+  assert.match(source, /event_type = 'auth_session_revoked'/);
+  assert.match(source, /jwtid: crypto\.randomUUID\(\)/);
+  assert.match(source, /issuer: JWT_ISSUER/);
+  assert.match(source, /audience: JWT_AUDIENCE/);
+  assert.match(source, /maxAge: JWT_EXPIRES/);
+});
+
+test('active username bans are checked on every authenticated API request', () => {
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  assert.match(source, /b\.username = u\.username/);
+  assert.match(source, /AS "isBanned"/);
+  assert.match(source, /if \(user\.isBanned\)/);
+});
+
+test('client security telemetry is audit-only and cannot create bans', () => {
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  const start = source.indexOf("app.post('/api/security-event'");
+  const end = source.indexOf("app.get('/api/health'", start);
+  const route = source.slice(start, end);
+  assert.match(route, /securityEventLimiter/);
+  assert.match(route, /allowedEventTypes/);
+  assert.doesNotMatch(route, /INSERT INTO security_bans/);
+});
+
+test('DevTools traps are not loaded by application pages', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const file of ['index.html', 'register.html', 'dashboard.html']) {
+    const html = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+    assert.doesNotMatch(html, /js\/anti-devtools\.js/);
+  }
+  const anti = fs.readFileSync(path.join(__dirname, '..', 'js', 'anti-devtools.js'), 'utf8');
+  assert.doesNotMatch(anti, /debugger;/);
+  assert.doesNotMatch(anti, /hardKick\(/);
+});
+
+test('Vercel static responses have browser security headers', () => {
+  const config = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'vercel.json'), 'utf8'));
+  const headers = config.headers[0].headers;
+  const values = Object.fromEntries(headers.map((entry) => [entry.key, entry.value]));
+  assert.match(values['Strict-Transport-Security'], /max-age=31536000/);
+  assert.equal(values['X-Frame-Options'], 'DENY');
+  assert.equal(values['Referrer-Policy'], 'no-referrer');
+  assert.match(values['Content-Security-Policy'], /frame-ancestors 'none'/);
+  assert.match(values['Permissions-Policy'], /camera=\(\)/);
+});
