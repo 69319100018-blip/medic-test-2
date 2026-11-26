@@ -537,7 +537,7 @@ async function syncAllWeeklyTabsForConnection(sql, connection) {
 async function safeGoogleEnsureCurrentWeek(sql, username) {
   try {
     const rows = await sql`
-      SELECT username, refresh_token_encrypted, spreadsheet_id, status
+      SELECT username, google_email, refresh_token_encrypted, spreadsheet_id, status
       FROM public.google_sheets_connections
       WHERE username = ${username} AND status = 'connected'
       LIMIT 1
@@ -555,7 +555,7 @@ async function safeGoogleEnsureCurrentWeek(sql, username) {
 async function safeGoogleRefreshUserSheets(sql, username) {
   try {
     const rows = await sql`
-      SELECT username, refresh_token_encrypted, spreadsheet_id, status
+      SELECT username, google_email, refresh_token_encrypted, spreadsheet_id, status
       FROM public.google_sheets_connections
       WHERE username = ${username} AND status = 'connected'
       LIMIT 1
@@ -630,7 +630,7 @@ async function processJob(sql, id) {
   if (!job) return { status: 'skipped' };
   try {
     const connections = await sql`
-      SELECT username, refresh_token_encrypted, spreadsheet_id, status
+      SELECT username, google_email, refresh_token_encrypted, spreadsheet_id, status
       FROM public.google_sheets_connections WHERE username = ${job.username} LIMIT 1
     `;
     await syncShift(sql, connections[0], job.shiftLogId);
@@ -847,7 +847,7 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
         ORDER BY created_at ASC LIMIT 10
       `;
       const connections = await sql`
-        SELECT username, refresh_token_encrypted, spreadsheet_id, status
+        SELECT username, google_email, refresh_token_encrypted, spreadsheet_id, status
         FROM public.google_sheets_connections
         WHERE username = ${s.username} AND status = 'connected'
         LIMIT 1
@@ -939,7 +939,7 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
         if (result.status !== 'skipped') processed += 1;
       }
       const connections = await sql`
-        SELECT username, refresh_token_encrypted, spreadsheet_id, status
+        SELECT username, google_email, refresh_token_encrypted, spreadsheet_id, status
         FROM public.google_sheets_connections
         WHERE status = 'connected' AND refresh_token_encrypted IS NOT NULL
         ORDER BY username
