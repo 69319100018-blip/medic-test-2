@@ -4979,3 +4979,84 @@ body.dashboard-body.theme-dark::after {
   .page-dashboard .google-sheets-actions { align-items: stretch; }
   .page-dashboard .google-sheets-actions > * { flex: 1 1 auto; }
 }
+
+
+/* Payroll grade assignment — member management */
+.page-dashboard .payroll-members-loading {
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-surface-muted);
+  color: var(--app-text-muted);
+  font-size: .84rem;
+}
+.page-dashboard .payroll-members-loading.is-error { color: #a83c49; }
+.page-dashboard .payroll-member-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, .8fr);
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 10px;
+  padding: 15px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 13px;
+  background: var(--app-surface);
+}
+.page-dashboard .payroll-member-identity {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.page-dashboard .payroll-member-identity strong {
+  color: var(--app-text);
+  font-size: .92rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.page-dashboard .payroll-member-identity span {
+  color: var(--app-text-muted);
+  font-size: .74rem;
+  overflow-wrap: anywhere;
+}
+.page-dashboard .payroll-grade-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 9px;
+  min-width: 0;
+}
+.page-dashboard .payroll-grade-controls label {
+  display: grid;
+  gap: 6px;
+  color: var(--app-text-muted);
+  font-size: .74rem;
+  font-weight: 700;
+}
+.page-dashboard .payroll-grade-controls select {
+  min-height: 40px;
+  border: 1px solid var(--app-border-strong);
+  border-radius: 9px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font-size: .8rem;
+}
+.page-dashboard .payroll-grade-controls .btn {
+  min-height: 40px;
+  white-space: nowrap;
+}
+.theme-dark .page-dashboard .payroll-member-card,
+.theme-dark .page-dashboard .payroll-members-loading {
+  border-color: #304b64;
+  background: #172d43;
+}
+.theme-dark .page-dashboard .payroll-member-identity strong { color: #f1f6fb; }
+.theme-dark .page-dashboard .payroll-member-identity span,
+.theme-dark .page-dashboard .payroll-grade-controls label { color: #c2d0de; }
+@media (max-width: 720px) {
+  .page-dashboard .payroll-member-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .page-dashboard .payroll-grade-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
