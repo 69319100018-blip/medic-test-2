@@ -130,6 +130,376 @@ async function shiftValues(sql, username, shiftLogId) {
   const r = rows[0];
   return [String(r.id), r.date || '', r.name || username, r.role || '', r.checkInTime || '', r.checkOutTime || '', r.duration || '', r.checkOutTime ? 'ออกเวรแล้ว' : 'กำลังเข้าเวร'];
 }
+
+const PAY_GRADE_RATES = [
+  { grade: 'ผู้อำนวยการ', rate: 45000, note: 'ผู้อำนวยการ' },
+  { grade: 'รองผู้อำนวยการ', rate: 40500, note: 'รองผู้อำนวยการ' },
+  { grade: 'แพทย์ชำนาญ', rate: 36000, note: 'แพทย์ชำนาญ' },
+  { grade: 'แพทย์', rate: 31500, note: 'แพทย์' },
+  { grade: 'นักเรียนแพทย์', rate: 27000, note: 'นักเรียนแพทย์' },
+  { grade: 'Test 7 Day', rate: 10000, note: 'แพทย์ใหม่ / ฝึกหัด ระยะ 7 วัน' },
+  { grade: 'แพทย์อาสา', rate: 10000, note: 'แพทย์อาสา' },
+  { grade: 'ผู้ช่วย/เลขา', rate: 30000, note: 'ผู้ช่วย / เลขา' },
+  { grade: 'โบรัสรันคิว', rate: 45000, note: 'โบรัสรันคิว' },
+  { grade: 'ไปสตอรี่', rate: 30000, note: 'ไปสตอรี่' }
+];
+const PAY_GRADE_OPTIONS = PAY_GRADE_RATES.map((item) => item.grade);
+const RANK_TAB = 'ยศ';
+
+function isValidPayGrade(value) {
+  return PAY_GRADE_OPTIONS.includes(String(value || ''));
+}
+
+function addIsoDays(value, days) {
+  const date = new Date(String(value) + 'T00:00:00.000Z');
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function thaiDateLabel(value) {
+  const date = new Date(String(value) + 'T00:00:00.000Z');
+  return new Intl.DateTimeFormat('th-TH', {
+    day: '2-digit', month: 'short', year: '2-digit', timeZone: 'UTC'
+  }).format(date);
+}
+
+function thaiWeekdayLabel(value) {
+  const date = new Date(String(value) + 'T00:00:00.000Z');
+  return new Intl.DateTimeFormat('th-TH', {
+    weekday: 'short', timeZone: 'UTC'
+  }).format(date);
+}
+
+function weeklyTabName(weekStart) {
+  return ('สัปดาห์ ' + thaiDateLabel(weekStart) + ' - ' + thaiDateLabel(addIsoDays(weekStart, 6)))
+    .replace(/[\\/:?*[\]]/g, '')
+    .slice(0, 99);
+}
+
+async function spreadsheetMetadata(token, spreadsheetId) {
+  return sheetsCall(token, spreadsheetId, 'GET', '?fields=sheets.properties(sheetId,title)');
+}
+
+async function updateSheetValues(token, spreadsheetId, range, values, inputOption = 'USER_ENTERED') {
+  return sheetsCall(
+    token,
+    spreadsheetId,
+    'PUT',
+    '/values/' + encodeURIComponent(range) + '?valueInputOption=' + inputOption,
+    { values }
+  );
+}
+
+async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
+  const weekTitle = weeklyTabName(weekStart);
+  let metadata = await spreadsheetMetadata(token, spreadsheetId);
+  let sheets = Array.isArray(metadata.sheets) ? metadata.sheets : [];
+  let rankSheet = sheets.find((sheet) => sheet.properties?.title === RANK_TAB)?.properties || null;
+  let weekSheet = sheets.find((sheet) => sheet.properties?.title === weekTitle)?.properties || null;
+  const createRank = !rankSheet;
+  const createWeek = !weekSheet;
+  const requests = [];
+
+  if (createRank) {
+    requests.push({
+      addSheet: {
+        properties: {
+          title: RANK_TAB,
+          gridProperties: { rowCount: 30, columnCount: 3, frozenRowCount: 1 }
+        }
+      }
+    });
+  }
+  if (createWeek) {
+    requests.push({
+      addSheet: {
+        properties: {
+          title: weekTitle,
+          gridProperties: { rowCount: 20, columnCount: 15, frozenRowCount: 2 }
+        }
+      }
+    });
+  }
+
+  if (requests.length) {
+    try {
+      await sheetsCall(token, spreadsheetId, 'POST', ':batchUpdate', { requests });
+    } catch (err) {
+      metadata = await spreadsheetMetadata(token, spreadsheetId);
+      sheets = Array.isArray(metadata.sheets) ? metadata.sheets : [];
+      const rankExists = sheets.some((sheet) => sheet.properties?.title === RANK_TAB);
+      const weekExists = sheets.some((sheet) => sheet.properties?.title === weekTitle);
+      if ((!createRank || rankExists) && (!createWeek || weekExists)) {
+        // Another overlapping sync created the same tabs first.
+      } else {
+        throw err;
+      }
+    }
+    metadata = await spreadsheetMetadata(token, spreadsheetId);
+    sheets = Array.isArray(metadata.sheets) ? metadata.sheets : [];
+    rankSheet = sheets.find((sheet) => sheet.properties?.title === RANK_TAB)?.properties || null;
+    weekSheet = sheets.find((sheet) => sheet.properties?.title === weekTitle)?.properties || null;
+  } else {
+    rankSheet = sheets.find((sheet) => sheet.properties?.title === RANK_TAB)?.properties || null;
+    weekSheet = sheets.find((sheet) => sheet.properties?.title === weekTitle)?.properties || null;
+  }
+
+  if (!rankSheet?.sheetId || !weekSheet?.sheetId) {
+    throw new Error('Google Sheets weekly tabs could not be initialized');
+  }
+
+  if (createRank) {
+    const values = [
+      ['ยศ', 'อัตราต่อชั่วโมง (บาท)', 'หมายเหตุ'],
+      ...PAY_GRADE_RATES.map((item) => [item.grade, item.rate, item.note])
+    ];
+    await updateSheetValues(token, spreadsheetId, RANK_TAB + '!A1:C' + values.length, values, 'RAW');
+    await sheetsCall(token, spreadsheetId, 'POST', ':batchUpdate', {
+      requests: [{
+        repeatCell: {
+          range: { sheetId: rankSheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 3 },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: { red: 0.13, green: 0.30, blue: 0.43 },
+              textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true },
+              horizontalAlignment: 'CENTER'
+            }
+          },
+          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+        }
+      }]
+    });
+  }
+
+  if (createWeek) {
+    const dayHeaders = Array.from({ length: 7 }, (_unused, index) => {
+      const date = addIsoDays(weekStart, index);
+      return thaiWeekdayLabel(date) + ' ' + thaiDateLabel(date);
+    });
+    const header = [
+      'ลำดับ', 'รายชื่อแพทย์', ...dayHeaders,
+      'TimeTotal', 'Total Money', 'ทำงานครบ 21 ชม.', 'รับเงินแล้ว', 'ยศ', 'อัตราต่อชั่วโมง (บาท)'
+    ];
+    const title = ['สรุปเวลาเข้าเวรและค่าตอบแทนประจำสัปดาห์'].concat(Array(14).fill(''));
+    const initialRow = [
+      1, '', '', '', '', '', '', '', '',
+      '=SUM(C3:I3)',
+      '=IF(O3="","",J3*24*O3)',
+      '=IF(J3*24>=21,"ครบ","ไม่ครบ")',
+      false,
+      '',
+      '=IFERROR(VLOOKUP(N3,ยศ!$A$2:$B$11,2,FALSE),"")'
+    ];
+    await updateSheetValues(
+      token,
+      spreadsheetId,
+      weekTitle + '!A1:O3',
+      [title, header, initialRow],
+      'USER_ENTERED'
+    );
+    await sheetsCall(token, spreadsheetId, 'POST', ':batchUpdate', {
+      requests: [
+        {
+          mergeCells: {
+            range: { sheetId: weekSheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 15 },
+            mergeType: 'MERGE_ALL'
+          }
+        },
+        {
+          repeatCell: {
+            range: { sheetId: weekSheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 15 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.13, green: 0.30, blue: 0.43 },
+                textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true, fontSize: 13 },
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+          }
+        },
+        {
+          repeatCell: {
+            range: { sheetId: weekSheet.sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 15 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.88, green: 0.93, blue: 0.97 },
+                textFormat: { foregroundColor: { red: 0.12, green: 0.25, blue: 0.35 }, bold: true },
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
+                wrapStrategy: 'WRAP'
+              }
+            },
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)'
+          }
+        },
+        {
+          repeatCell: {
+            range: { sheetId: weekSheet.sheetId, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 2, endColumnIndex: 10 },
+            cell: { userEnteredFormat: { numberFormat: { type: 'TIME', pattern: '[h]:mm' }, horizontalAlignment: 'CENTER' } },
+            fields: 'userEnteredFormat(numberFormat,horizontalAlignment)'
+          }
+        },
+        {
+          repeatCell: {
+            range: { sheetId: weekSheet.sheetId, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 10, endColumnIndex: 11 },
+            cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '#,##0.00' }, horizontalAlignment: 'RIGHT' } },
+            fields: 'userEnteredFormat(numberFormat,horizontalAlignment)'
+          }
+        },
+        {
+          setDataValidation: {
+            range: { sheetId: weekSheet.sheetId, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 12, endColumnIndex: 13 },
+            rule: { condition: { type: 'BOOLEAN' }, showCustomUi: true, strict: true }
+          }
+        }
+      ]
+    });
+  }
+
+  return { weekTitle, rankSheetId: rankSheet.sheetId, weekSheetId: weekSheet.sheetId };
+}
+
+async function getPayrollProfile(sql, username) {
+  const rows = await sql`
+    SELECT username, display_name AS name, role, pay_grade AS "payGrade",
+      TO_CHAR((created_at AT TIME ZONE 'Asia/Bangkok')::date, 'YYYY-MM-DD') AS "registeredDate"
+    FROM public.users
+    WHERE username = ${username}
+    LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
+async function getCurrentWeekStart(sql) {
+  const rows = await sql`
+    SELECT TO_CHAR(DATE_TRUNC('week', NOW() AT TIME ZONE 'Asia/Bangkok')::date, 'YYYY-MM-DD') AS "weekStart"
+  `;
+  return rows[0]?.weekStart || null;
+}
+
+async function getWeekStartForShift(sql, username, shiftLogId) {
+  const rows = await sql`
+    SELECT TO_CHAR(DATE_TRUNC('week', e.datetime AT TIME ZONE 'Asia/Bangkok')::date, 'YYYY-MM-DD') AS "weekStart"
+    FROM public.shift_logs e
+    WHERE e.id = ${shiftLogId} AND e.username = ${username} AND e.type = 'เข้าเวร'
+    LIMIT 1
+  `;
+  return rows[0]?.weekStart || null;
+}
+
+async function getWeeklyDayTotals(sql, username, weekStart) {
+  const weekEnd = addIsoDays(weekStart, 7);
+  return sql`
+    WITH sessions AS (
+      SELECT
+        (e.datetime AT TIME ZONE 'Asia/Bangkok')::date AS local_date,
+        e.datetime AS check_in_at,
+        x.check_out_at
+      FROM public.shift_logs e
+      LEFT JOIN LATERAL (
+        SELECT o.created_at AS check_out_at
+        FROM public.shift_logs o
+        WHERE o.username = e.username
+          AND o.type = 'ออกเวร'
+          AND o.date_th = e.date_th
+          AND o.created_at >= e.created_at
+          AND o.created_at < COALESCE((
+            SELECT MIN(n.created_at)
+            FROM public.shift_logs n
+            WHERE n.username = e.username
+              AND n.type = 'เข้าเวร'
+              AND n.created_at > e.created_at
+          ), 'infinity'::timestamptz)
+        ORDER BY o.created_at ASC
+        LIMIT 1
+      ) x ON true
+      WHERE e.username = ${username}
+        AND e.type = 'เข้าเวร'
+        AND e.datetime IS NOT NULL
+        AND (e.datetime AT TIME ZONE 'Asia/Bangkok')::date >= ${weekStart}::date
+        AND (e.datetime AT TIME ZONE 'Asia/Bangkok')::date < ${weekEnd}::date
+    )
+    SELECT TO_CHAR(local_date, 'YYYY-MM-DD') AS date,
+      COALESCE(SUM(CASE
+        WHEN check_out_at IS NULL THEN 0
+        ELSE GREATEST(0, EXTRACT(EPOCH FROM (check_out_at - check_in_at)))
+      END), 0)::bigint AS seconds
+    FROM sessions
+    GROUP BY local_date
+  `;
+}
+
+async function syncWeeklyWeek(sql, token, connection, profile, weekStart) {
+  const totals = await getWeeklyDayTotals(sql, connection.username, weekStart);
+  const byDate = new Map(totals.map((row) => [row.date, Number(row.seconds) || 0]));
+  const dailyValues = Array.from({ length: 7 }, (_unused, index) => {
+    const date = addIsoDays(weekStart, index);
+    if (date < profile.registeredDate) return '';
+    const seconds = byDate.get(date) || 0;
+    return seconds > 0 ? seconds / 86400 : '';
+  });
+  const tabs = await ensurePayrollTabs(token, connection.spreadsheet_id, weekStart);
+  const title = tabs.weekTitle;
+  await updateSheetValues(token, connection.spreadsheet_id, title + '!C3:I3', [dailyValues]);
+  await updateSheetValues(token, connection.spreadsheet_id, title + '!B3:B3', [[profile.name || connection.username]]);
+  await updateSheetValues(token, connection.spreadsheet_id, title + '!J3:L3', [[
+    '=SUM(C3:I3)',
+    '=IF(O3="","",J3*24*O3)',
+    '=IF(J3*24>=21,"ครบ","ไม่ครบ")'
+  ]]);
+  await updateSheetValues(token, connection.spreadsheet_id, title + '!N3:O3', [[
+    profile.payGrade || '',
+    '=IFERROR(VLOOKUP(N3,ยศ!$A$2:$B$11,2,FALSE),"")'
+  ]]);
+}
+
+async function syncCurrentWeekForConnection(sql, connection) {
+  if (!connection || connection.status !== 'connected' || !connection.refresh_token_encrypted) return;
+  const profile = await getPayrollProfile(sql, connection.username);
+  const weekStart = await getCurrentWeekStart(sql);
+  if (!profile || !weekStart) return;
+  const token = await googleRefresh(connection);
+  await syncWeeklyWeek(sql, token, connection, profile, weekStart);
+}
+
+async function syncAllWeeklyTabsForConnection(sql, connection) {
+  if (!connection || connection.status !== 'connected' || !connection.refresh_token_encrypted) return;
+  const profile = await getPayrollProfile(sql, connection.username);
+  if (!profile) return;
+  const rows = await sql`
+    SELECT DISTINCT TO_CHAR(DATE_TRUNC('week', datetime AT TIME ZONE 'Asia/Bangkok')::date, 'YYYY-MM-DD') AS "weekStart"
+    FROM public.shift_logs
+    WHERE username = ${connection.username} AND type = 'เข้าเวร' AND datetime IS NOT NULL
+    ORDER BY "weekStart"
+  `;
+  const weekStarts = new Set(rows.map((row) => row.weekStart).filter(Boolean));
+  const currentWeek = await getCurrentWeekStart(sql);
+  if (currentWeek) weekStarts.add(currentWeek);
+  const token = await googleRefresh(connection);
+  for (const weekStart of Array.from(weekStarts).sort()) {
+    await syncWeeklyWeek(sql, token, connection, profile, weekStart);
+  }
+}
+
+async function safeGoogleRefreshUserSheets(sql, username) {
+  try {
+    const rows = await sql`
+      SELECT username, refresh_token_encrypted, spreadsheet_id, status
+      FROM public.google_sheets_connections
+      WHERE username = ${username} AND status = 'connected'
+      LIMIT 1
+    `;
+    if (!rows.length) return { status: 'not_connected' };
+    await scheduleBackground(() => syncAllWeeklyTabsForConnection(sql, rows[0]));
+    return { status: 'scheduled' };
+  } catch (err) {
+    console.error('Google Sheets payroll refresh could not be scheduled:', err.code || err.name || 'unknown');
+    return { status: 'pending' };
+  }
+}
+
 async function syncShift(sql, connection, id) {
   if (!connection || connection.status !== 'connected' || !connection.refresh_token_encrypted) {
     throw Object.assign(new Error('Google account is not connected'), { terminal: true });
@@ -149,7 +519,11 @@ async function syncShift(sql, connection, id) {
       '/values/' + encodeURIComponent(TAB + '!A:H') + ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',
       { values: [row] });
   }
+  const profile = await getPayrollProfile(sql, connection.username);
+  const weekStart = await getWeekStartForShift(sql, connection.username, id);
+  if (profile && weekStart) await syncWeeklyWeek(sql, token, connection, profile, weekStart);
 }
+
 async function scheduleBackground(task) {
   if (process.env.VERCEL) {
     try {
