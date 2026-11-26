@@ -289,7 +289,7 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
       1, '', '', '', '', '', '', '', '',
       '=SUM(C3:I3)',
       '=IF(O3="","",J3*24*O3)',
-      '=IF(J3*24>=21,"ครบ","ไม่ครบ")',
+      '=J3*24>=21',
       false,
       '',
       "=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$11,2,FALSE),\"\")"
@@ -350,6 +350,12 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
             range: { sheetId: weekSheet.sheetId, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 10, endColumnIndex: 11 },
             cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '#,##0.00' }, horizontalAlignment: 'RIGHT' } },
             fields: 'userEnteredFormat(numberFormat,horizontalAlignment)'
+          }
+        },
+        {
+          setDataValidation: {
+            range: { sheetId: weekSheet.sheetId, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 11, endColumnIndex: 12 },
+            rule: { condition: { type: 'BOOLEAN' }, showCustomUi: true, strict: true }
           }
         },
         {
@@ -451,7 +457,7 @@ async function syncWeeklyWeek(sql, token, connection, profile, weekStart) {
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'J3:L3'), [[
     '=SUM(C3:I3)',
     '=IF(O3="","",J3*24*O3)',
-    '=IF(J3*24>=21,"ครบ","ไม่ครบ")'
+    '=J3*24>=21'
   ]]);
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'N3:O3'), [[
     profile.payGrade || '',
