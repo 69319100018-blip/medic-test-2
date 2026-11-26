@@ -360,10 +360,10 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
   assert.match(source, /addProtectedRange/);
   assert.match(source, /WEEKLY_RANK_PROTECTION_DESCRIPTION/);
   assert.match(source, /RANK_PROTECTION_DESCRIPTION/);
-  assert.match(source, /getPayrollInfoForRole\\(profile\\.role\\)/);
-  assert.match(source, /profile\\.payroll\\?\\.grade/);
-  assert.match(api, /getPayrollInfoForRole\\(u\\.role\\)/);
-  assert.match(api, /safeGoogleRefreshUserSheets\\(sql, uname\\)/);
+  assert.match(source, /getPayrollInfoForRole\(profile\.role\)/);
+  assert.match(source, /profile\.payroll\?\.grade/);
+  assert.match(api, /getPayrollInfoForRole\(u\.role\)/);
+  assert.match(api, /safeGoogleRefreshUserSheets\(sql, uname\)/);
   assert.doesNotMatch(api, /pay_grade AS "payGrade"|hasPayGrade|pay_grade = CASE/);
   const payroll = require('../api/pay-grade');
   assert.deepEqual(payroll.getPayrollInfoForRole('รองผู้อำนวยการแพทย์'), {
