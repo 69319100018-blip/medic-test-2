@@ -10,6 +10,7 @@
 require('dotenv').config();
 const express = require('express');
 const crypto = require('node:crypto');
+const { registerGoogleSheetsRoutes, safeGoogleQueueShift } = require('./google-sheets');
 const net = require('node:net');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -590,6 +591,8 @@ app.post('/api/logout', authRequired, async (req, res) => {
   }
 });
 
+registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError });
+
 app.get('/api/me', authRequired, async (req, res) => {
   try {
     if (!needDb(res)) return;
@@ -729,7 +732,8 @@ app.post('/api/shift-checkin', authRequired, async (req, res) => {
       date: t.date,
       time: t.time
     }).catch(() => {});
-    return res.json(inserted[0]);
+    const googleSheetsSync = await safeGoogleQueueShift(sql, username, inserted[0].id);
+    return res.json({ ...inserted[0], googleSheetsSync });
   } catch (err) {
     if (err?.code === '23505') return res.status(409).json({ error: 'เข้าเวรอยู่แล้ว' });
     safeError(res, err);
@@ -781,7 +785,7 @@ app.post('/api/shift-checkout', authRequired, async (req, res) => {
           (candidate.total_seconds % 60)::text || ' วินาที'
         FROM candidate
         WHERE shift.id = candidate.id
-        RETURNING shift.username, shift.duration
+        RETURNING shift.id AS shift_log_id, shift.username, shift.duration
       ),
       checkout_event AS (
         INSERT INTO shift_logs (username, type, date_th, time_th, duration, is_forced)
@@ -790,7 +794,8 @@ app.post('/api/shift-checkout', authRequired, async (req, res) => {
         RETURNING id, username, type, date_th AS date, time_th AS time,
                   duration, is_forced AS "isForced"
       )
-      SELECT * FROM checkout_event
+      SELECT checkout_event.*, updated.shift_log_id
+      FROM checkout_event CROSS JOIN updated
     `;
 
     if (!inserted.length) return res.status(409).json({ error: 'ไม่พบเวรที่ค้างอยู่' });
@@ -806,7 +811,8 @@ app.post('/api/shift-checkout', authRequired, async (req, res) => {
       duration: result.duration,
       isForced
     }).catch(() => {});
-    return res.json(result);
+    const googleSheetsSync = await safeGoogleQueueShift(sql, username, result.shift_log_id);
+    return res.json({ ...result, googleSheetsSync });
   } catch (err) {
     safeError(res, err);
   }
