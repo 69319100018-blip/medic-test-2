@@ -474,12 +474,22 @@
       }
     };
 
-    document.getElementById('btnLogout')?.addEventListener('click', () => {
-      if (typeof clearSession === 'function') clearSession();
-      sessionStorage.removeItem('medicUser');
-      sessionStorage.removeItem('medicProfile');
-      sessionStorage.removeItem('medicToken');
-      sessionStorage.removeItem('loggedInUser');
+    document.getElementById('btnLogout')?.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      try {
+        if (typeof apiLogout === 'function') await apiLogout();
+      } catch (_err) {
+        // Always clear local credentials even if the network is unavailable.
+      } finally {
+        if (typeof clearSession === 'function') clearSession();
+        sessionStorage.removeItem('medicUser');
+        sessionStorage.removeItem('medicProfile');
+        sessionStorage.removeItem('medicToken');
+        sessionStorage.removeItem('loggedInUser');
+        sessionStorage.removeItem('medicFp');
+        window.location.href = 'index.html';
+      }
     }, true);
 
     const boot = () => {

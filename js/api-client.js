@@ -52,36 +52,33 @@ function clearSession() {
 
 async function api(path, options = {}) {
   const url = `${API_BASE}/api${path}`;
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options.headers || {})
-  };
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   const token = getToken();
+  const fingerprint = sessionStorage.getItem('medicFp') || '';
   if (token) headers.Authorization = `Bearer ${token}`;
-
+  if (fingerprint && fingerprint.length <= 128) headers['X-Device-Fingerprint'] = fingerprint;
   const res = await fetch(url, {
-    ...options,
-    headers,
+    ...options, headers, cache: 'no-store',
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined
   });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401) {
+  if (res.status === 401 || (res.status === 403 && data.banned === true)) {
     clearSession();
-    if (!window.location.pathname.includes('index')) {
-      window.location.href = 'index.html';
-    }
-    throw new Error(data.error || 'ต้องเข้าสู่ระบบก่อน');
+    sessionStorage.removeItem('medicFp');
+    if (!window.location.pathname.includes('index')) window.location.href = 'index.html';
+    throw new Error(data.error || 'เซสชันหมดอายุหรือถูกระงับ กรุณาเข้าสู่ระบบใหม่');
   }
   if (!res.ok) {
-    if (res.status === 404) {
-      throw new Error('ไม่พบ API (404) — ต้อง deploy โค้ดล่าสุดขึ้น Vercel');
-    }
-    if (res.status === 503) {
-      throw new Error(data.error || 'เซิร์ฟเวอร์ยังไม่พร้อม (ตรวจ Environment Variables)');
-    }
+    if (res.status === 404) throw new Error('ไม่พบ API (404) — ต้อง deploy โค้ดล่าสุดขึ้น Vercel');
+    if (res.status === 503) throw new Error(data.error || 'เซิร์ฟเวอร์ยังไม่พร้อม (ตรวจ Environment Variables)');
     throw new Error(data.error || res.statusText || 'API error');
   }
   return data;
+}
+
+async function apiLogout() {
+  if (!getToken()) return { ok: true };
+  return api('/logout', { method: 'POST', body: {} });
 }
 
 async function apiLogin(username, password) {
