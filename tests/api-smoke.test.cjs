@@ -356,14 +356,25 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
   assert.match(source, /J3\*24>=21/);
   assert.match(source, /startColumnIndex: 11, endColumnIndex: 12/);
   assert.match(source, /startColumnIndex: 12, endColumnIndex: 13/);
-  assert.match(source, /'ยศ'!\$A\$2:\$B\$9/);
   assert.match(source, /syncCurrentWeekForConnection/);
-  assert.match(api, /pay_grade AS "payGrade"/);
-  assert.match(api, /safeGoogleRefreshUserSheets\(sql, uname\)/);
-  const payroll = require('../api/google-sheets');
-  assert.equal(payroll.isValidPayGrade('นักเรียนแพทย์'), true);
-  assert.equal(payroll.isValidPayGrade('not-a-grade'), false);
-  assert.equal(payroll.isValidPayGrade('โบรัสรันคิว'), false);
+  assert.match(source, /addProtectedRange/);
+  assert.match(source, /WEEKLY_RANK_PROTECTION_DESCRIPTION/);
+  assert.match(source, /RANK_PROTECTION_DESCRIPTION/);
+  assert.match(source, /getPayrollInfoForRole\\(profile\\.role\\)/);
+  assert.match(source, /profile\\.payroll\\?\\.grade/);
+  assert.match(api, /getPayrollInfoForRole\\(u\\.role\\)/);
+  assert.match(api, /safeGoogleRefreshUserSheets\\(sql, uname\\)/);
+  assert.doesNotMatch(api, /pay_grade AS "payGrade"|hasPayGrade|pay_grade = CASE/);
+  const payroll = require('../api/pay-grade');
+  assert.deepEqual(payroll.getPayrollInfoForRole('รองผู้อำนวยการแพทย์'), {
+    sourceRole: 'รองผู้อำนวยการแพทย์', grade: 'รองผู้อำนวยการ', rate: 40500, matched: true
+  });
+  assert.deepEqual(payroll.getPayrollInfoForRole('นักเรียนแพทย์'), {
+    sourceRole: 'นักเรียนแพทย์', grade: 'นักเรียนแพทย์', rate: 27000, matched: true
+  });
+  assert.equal(payroll.getPayrollInfoForRole('ผู้อำนวยการแพทย์').rate, 45000);
+  assert.equal(payroll.getPayrollInfoForRole('แอดมินแพทย์').matched, false);
+  assert.equal(payroll.getPayrollInfoForRole('แอดมินแพทย์').rate, null);
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   assert.ok(pkg.dependencies['@vercel/functions']);
 });
