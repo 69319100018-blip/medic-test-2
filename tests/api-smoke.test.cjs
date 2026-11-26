@@ -356,13 +356,14 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
   assert.match(source, /J3\*24>=21/);
   assert.match(source, /startColumnIndex: 11, endColumnIndex: 12/);
   assert.match(source, /startColumnIndex: 12, endColumnIndex: 13/);
-  assert.match(source, /'ยศ'!\$A\$2:\$B\$11/);
+  assert.match(source, /'ยศ'!\$A\$2:\$B\$9/);
   assert.match(source, /syncCurrentWeekForConnection/);
   assert.match(api, /pay_grade AS "payGrade"/);
   assert.match(api, /safeGoogleRefreshUserSheets\(sql, uname\)/);
   const payroll = require('../api/google-sheets');
   assert.equal(payroll.isValidPayGrade('นักเรียนแพทย์'), true);
   assert.equal(payroll.isValidPayGrade('not-a-grade'), false);
+  assert.equal(payroll.isValidPayGrade('โบรัสรันคิว'), false);
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   assert.ok(pkg.dependencies['@vercel/functions']);
 });
