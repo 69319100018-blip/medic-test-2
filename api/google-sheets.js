@@ -132,14 +132,14 @@ async function shiftValues(sql, username, shiftLogId) {
 }
 
 const PAY_GRADE_RATES = [
-  { grade: 'ผู้อำนวยการ', rate: 45000, note: 'ผู้อำนวยการ' },
-  { grade: 'รองผู้อำนวยการ', rate: 40500, note: 'รองผู้อำนวยการ' },
-  { grade: 'แพทย์ชำนาญ', rate: 36000, note: 'แพทย์ชำนาญ' },
-  { grade: 'แพทย์', rate: 31500, note: 'แพทย์' },
-  { grade: 'นักเรียนแพทย์', rate: 27000, note: 'นักเรียนแพทย์' },
-  { grade: 'Test 7 Day', rate: 10000, note: 'แพทย์ใหม่ / ฝึกหัด ระยะ 7 วัน' },
+  { grade: 'ผู้อำนวยการ', rate: 45000, note: 'สามารถทำงาน และ เข้าใจแพทย์ได้เป็นอย่างดี' },
+  { grade: 'รองผู้อำนวยการ', rate: 40500, note: 'ผู้ช่วยผู้อำนวยการใกล้เคียง กับ ผู้อำนวยการ' },
+  { grade: 'แพทย์ชำนาญ', rate: 36000, note: 'ผู้ช่วยดูแลหน่วยงานแพทย์' },
+  { grade: 'แพทย์', rate: 31500, note: 'แพทย์เข้าเวรเกิน 1 เดือน และ สอบขับฮอล์' },
+  { grade: 'นักเรียนแพทย์', rate: 27000, note: 'นักเรียนแพทย์ เข้าเวร 3ชม. ครบ 10วัน' },
+  { grade: 'Test 7 Day', rate: 10000, note: 'แพทย์ใหม่ / ฝึกหัด' },
   { grade: 'แพทย์อาสา', rate: 10000, note: 'แพทย์อาสา' },
-  { grade: 'ผู้ช่วย/เลขา', rate: 30000, note: 'ผู้ช่วย / เลขา' },
+  { grade: 'ผู้ช่วย/เลขา', rate: 30000, note: 'คอยช่วยเหลือและประสานงานแทนผู้อำนวยการ' },
 ];
 const PAY_GRADE_OPTIONS = PAY_GRADE_RATES.map((item) => item.grade);
 const RANK_TAB = 'ยศ';
@@ -252,7 +252,7 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
 
   if (createRank) {
     const values = [
-      ['ยศ', 'อัตราต่อชั่วโมง (บาท)', 'หมายเหตุ'],
+      ['ยศ', 'อัตราตามยศ (บาท)', 'หมายเหตุ'],
       ...PAY_GRADE_RATES.map((item) => [item.grade, item.rate, item.note])
     ];
     await updateSheetValues(token, spreadsheetId, RANK_TAB + '!A1:C' + values.length, values, 'RAW');
@@ -280,7 +280,7 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
     });
     const header = [
       'ลำดับ', 'รายชื่อแพทย์', ...dayHeaders,
-      'TimeTotal', 'Total Money', 'ทำงานครบ 21 ชม.', 'รับเงินแล้ว', 'ยศ', 'อัตราต่อชั่วโมง (บาท)'
+      'TimeTotal', 'Total Money', 'ทำงานครบ 21 ชม.', 'รับเงินแล้ว', 'ยศ', 'อัตราตามยศ (บาท)'
     ];
     const title = ['สรุปเวลาเข้าเวรและค่าตอบแทนประจำสัปดาห์'].concat(Array(14).fill(''));
     const initialRow = [
