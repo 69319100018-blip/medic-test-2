@@ -365,6 +365,10 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
   assert.match(source, /addProtectedRange/);
   assert.match(source, /WEEKLY_DATA_PROTECTION_DESCRIPTION/);
   assert.match(source, /WEEKLY_RANK_PROTECTION_DESCRIPTION/);
+  assert.match(source, /WEEKLY_DATA_PROTECTION_DESCRIPTION/);
+  assert.match(source, /editors: \{ users: ownerEmail \? \[ownerEmail\] : \[\]/);
+  assert.match(source, /connection\.google_email/);
+  assert.match(source, /syncAllWeeklyTabsForConnection\(sql, rows\[0\]\)/);
   assert.match(source, /RANK_PROTECTION_DESCRIPTION/);
   assert.match(source, /getPayrollInfoForRole\(profile\.role\)/);
   assert.match(source, /profile\.payroll\?\.grade/);
