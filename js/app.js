@@ -396,7 +396,11 @@ async function retryPersonalGoogleSheets() {
   googleSheetsBusy = true;
   try {
     const result = await apiGoogleSheetsRetry();
-    showAlert('ส่งรายการซิงก์แล้ว', 'พบ ' + Number(result.queued || 0) + ' รายการ · ประมวลผลทันที ' + Number(result.processed || 0) + ' รายการ', 'success');
+    showAlert(
+      'ส่งรายการซิงก์แล้ว',
+      'นำ ' + Number(result.scheduled || 0) + ' รายการเข้าซิงก์เบื้องหลังจากทั้งหมด ' + Number(result.queued || 0) + ' รายการ',
+      'success'
+    );
     await loadGoogleSheetsStatus();
   } catch (err) {
     showAlert('ซิงก์ไม่สำเร็จ', err.message || 'กรุณาลองใหม่', 'error');
