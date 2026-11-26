@@ -9,6 +9,8 @@
  */
 require('dotenv').config();
 const express = require('express');
+const crypto = require('node:crypto');
+const net = require('node:net');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -21,10 +23,13 @@ const { canApproveLeave } = require('./leave-permissions');
 const app = express();
 // Vercel terminates TLS/proxy traffic and forwards the client IP in X-Forwarded-For.
 // Trust the immediate platform proxy so express-rate-limit can safely derive client IPs.
-app.set('trust proxy', 1);
+app.set('trust proxy', process.env.VERCEL === '1' ? 1 : false);
 app.disable('x-powered-by');
 const JWT_SECRET = process.env.JWT_SECRET || '';
-const JWT_EXPIRES = '12h';
+const JWT_EXPIRES = '8h';
+const JWT_ISSUER = 'medic-shift-log';
+const JWT_AUDIENCE = 'medic-shift-log-web';
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('Medic Shift Log non-existent account sentinel', 12);
 // Keep each Discord destination independent so one missing webhook never leaks
 // an event into another channel.
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
@@ -41,7 +46,24 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
 
 const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null;
 
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: { directives: {
+    defaultSrc: ["'self'"], baseUri: ["'self'"], objectSrc: ["'none'"],
+    frameAncestors: ["'none'"], frameSrc: ["'none'"], formAction: ["'self'"],
+    scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'], scriptSrcAttr: ["'none'"],
+    styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
+    imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+    fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+    connectSrc: ["'self'"], mediaSrc: ["'self'", 'data:', 'blob:', 'https:'],
+    workerSrc: ["'self'", 'blob:'],
+    upgradeInsecureRequests: process.env.VERCEL === '1' ? [] : null
+  } },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  frameguard: { action: 'deny' },
+  referrerPolicy: { policy: 'no-referrer' },
+  hsts: process.env.VERCEL === '1' ? { maxAge: 31536000, includeSubDomains: true, preload: false } : false
+}));
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map((s) => s.trim()).filter(Boolean);
@@ -58,6 +80,20 @@ app.use(cors({
 
 app.use(express.json({ limit: '100kb' }));
 
+// Layered abuse throttles. Login failures are counted persistently in Neon below.
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 600, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: 'มีคำขอมากเกินไป กรุณารอสักครู่แล้วลองใหม่' } });
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, skipSuccessfulRequests: true, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: 'เข้าสู่ระบบผิดหลายครั้ง กรุณารอ 15 นาที' } });
+const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: 'สมัครบัญชีบ่อยเกินไป กรุณาลองใหม่ภายหลัง' } });
+const securityCheckLimiter = rateLimit({ windowMs: 5 * 60 * 1000, limit: 30, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: 'ตรวจสอบความปลอดภัยบ่อยเกินไป กรุณารอสักครู่' } });
+const securityEventLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 40, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: 'ส่งรายงานความปลอดภัยบ่อยเกินไป' } });
+
+app.use('/api', apiLimiter, (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('X-Request-Id', crypto.randomUUID());
+  next();
+});
+
 // รองรับ path ทั้งแบบ /api/... และกรณี rewrite
 app.use((req, _res, next) => {
   // บางสภาพแวดล้อม Vercel ส่ง url มาไม่ครบ
@@ -65,15 +101,6 @@ app.use((req, _res, next) => {
     req.url = req.originalUrl;
   }
   next();
-});
-
-// Vercel: rate-limit ใช้ memory ต่อ instance (พอใช้)
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'ลองเข้าสู่ระบบบ่อยเกินไป รอ 15 นาที' }
 });
 
 function thaiNow() {
@@ -88,47 +115,85 @@ function thaiNow() {
 }
 
 function signToken(user) {
-  return jwt.sign(
-    {
-      sub: user.username,
-      role: user.role,
-      isAdmin: !!user.isAdmin,
-      canViewMonitoring: !!user.canViewMonitoring
-    },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES }
-  );
+  return jwt.sign({ sub: user.username }, JWT_SECRET, {
+    algorithm: 'HS256',
+    expiresIn: JWT_EXPIRES,
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
+    jwtid: crypto.randomUUID()
+  });
 }
 
 async function authRequired(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'ต้องเข้าสู่ระบบก่อน' });
-  if (!JWT_SECRET || JWT_SECRET.length < 32 || !sql) {
-    return res.status(503).json({ error: 'ระบบยืนยันตัวตนยังไม่พร้อม' });
-  }
+  if (!JWT_SECRET || JWT_SECRET.length < 32 || !sql) return res.status(503).json({ error: 'ระบบยืนยันตัวตนยังไม่พร้อม' });
 
   let claims;
   try {
-    claims = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    claims = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'],
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+      maxAge: JWT_EXPIRES
+    });
+    if (typeof claims.sub !== 'string' || !claims.sub ||
+        typeof claims.jti !== 'string' || !/^[0-9a-f-]{36}$/i.test(claims.jti)) {
+      throw new Error('invalid token claims');
+    }
   } catch {
-    return res.status(401).json({ error: 'โทเคนหมดอายุหรือไม่ถูกต้อง' });
+    return res.status(401).json({ error: 'โทเคนหมดอายุหรือไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
   }
 
-  // Permissions are reloaded for every request so role changes take effect immediately.
   try {
+    const rawFingerprint = String(req.headers['x-device-fingerprint'] || '').trim();
+    const fingerprint = rawFingerprint.length <= 128 ? (rawFingerprint || null) : null;
+    const ip = clientIp(req);
+    const sessionDetail = 'jti:' + claims.jti;
     const rows = await sql`
-      SELECT username, role, is_admin AS "isAdmin",
-             can_view_monitoring AS "canViewMonitoring"
-      FROM users WHERE username = ${claims.sub} LIMIT 1
+      SELECT u.username, u.role,
+             u.is_admin AS "isAdmin",
+             u.can_view_monitoring AS "canViewMonitoring",
+             (EXISTS (
+               SELECT 1 FROM security_events issued
+               WHERE issued.event_type = 'auth_session_issued'
+                 AND issued.username = u.username
+                 AND issued.detail = ${sessionDetail}
+                 AND issued.created_at > NOW() - INTERVAL '8 hours'
+             ) AND NOT EXISTS (
+               SELECT 1 FROM security_events revoked
+               WHERE revoked.event_type = 'auth_session_revoked'
+                 AND revoked.username = u.username
+                 AND revoked.detail = ${sessionDetail}
+             )) AS "sessionActive",
+             EXISTS (
+               SELECT 1 FROM security_bans b
+               WHERE b.active = true AND (
+                 b.username = u.username
+                 OR (${fingerprint}::text IS NOT NULL AND b.fingerprint = ${fingerprint})
+                 OR (${ip}::text IS NOT NULL AND b.ip_address = ${ip})
+               )
+             ) AS "isBanned"
+      FROM users u
+      WHERE u.username = ${claims.sub}
+      LIMIT 1
     `;
     if (!rows.length) return res.status(401).json({ error: 'บัญชีนี้ไม่มีอยู่หรือถูกปิดใช้งาน' });
     const user = rows[0];
-    req.user = { ...claims, sub: user.username, role: user.role,
-      isAdmin: !!user.isAdmin, canViewMonitoring: !!user.canViewMonitoring };
+    if (user.isBanned) return res.status(403).json({ error: 'บัญชีหรืออุปกรณ์นี้ถูกระงับการใช้งาน', banned: true });
+    if (!user.sessionActive) return res.status(401).json({ error: 'เซสชันนี้ถูกยกเลิกหรือหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
+
+    req.user = {
+      ...claims,
+      sub: user.username,
+      role: user.role,
+      isAdmin: !!user.isAdmin,
+      canViewMonitoring: !!user.canViewMonitoring
+    };
     return next();
   } catch (err) {
-    console.error('Authentication user lookup failed:', err);
+    console.error('Authentication session check failed:', err?.code || err?.name || 'unknown');
     return res.status(503).json({ error: 'ไม่สามารถตรวจสอบสิทธิ์ได้ในขณะนี้' });
   }
 }
@@ -168,21 +233,19 @@ function safeError(res, err, status = 500) {
 
 
 function clientIp(req) {
-  const xf = req.headers['x-forwarded-for'];
-  if (xf) return String(xf).split(',')[0].trim();
-  return req.headers['x-real-ip'] || req.socket?.remoteAddress || '';
+  return String(req.ip || req.socket?.remoteAddress || '').slice(0, 64);
 }
 
-async function isBanned({ fingerprint, ip }) {
+async function isBanned({ username, fingerprint, ip }) {
   if (!sql) return null;
   const rows = await sql`
     SELECT id, reason, fingerprint, ip_address, username
     FROM security_bans
-    WHERE active = true
-      AND (
-        (${fingerprint || null}::text IS NOT NULL AND fingerprint = ${fingerprint || null})
-        OR (${ip || null}::text IS NOT NULL AND ip_address = ${ip || null})
-      )
+    WHERE active = true AND (
+      (${username || null}::text IS NOT NULL AND username = ${username || null})
+      OR (${fingerprint || null}::text IS NOT NULL AND fingerprint = ${fingerprint || null})
+      OR (${ip || null}::text IS NOT NULL AND ip_address = ${ip || null})
+    )
     ORDER BY created_at DESC
     LIMIT 1
   `;
@@ -317,7 +380,7 @@ function needDb(res) {
 // ---------- Auth ----------
 
 // ---------- Register / User role (admin) ----------
-app.post('/api/register', loginLimiter, async (req, res) => {
+app.post('/api/register', registerLimiter, async (req, res) => {
   try {
     if (!needDb(res)) return;
     const { username, displayName, password } = req.body || {};
@@ -425,63 +488,103 @@ app.post('/api/user-role', authRequired, async (req, res) => {
 app.post('/api/login', loginLimiter, async (req, res) => {
   try {
     if (!needDb(res)) return;
-    if (!JWT_SECRET || JWT_SECRET.length < 32) {
-      return res.status(503).json({ error: 'ยังไม่ได้ตั้งค่า JWT_SECRET ที่ปลอดภัย (อย่างน้อย 32 ตัวอักษร)' });
-    }
+    if (!JWT_SECRET || JWT_SECRET.length < 32) return res.status(503).json({ error: 'ยังไม่ได้ตั้งค่า JWT_SECRET ที่ปลอดภัย' });
     const { username, password } = req.body || {};
-    if (!username || !password) {
-      return res.status(400).json({ error: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
-    }
+    if (!username || !password) return res.status(400).json({ error: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
     const uname = String(username).trim().toLowerCase();
     const pass = String(password);
-    if (uname.length > 64 || Buffer.byteLength(pass, 'utf8') > 1024) {
-      return res.status(400).json({ error: 'ข้อมูลเข้าสู่ระบบยาวเกินกำหนด' });
+    if (uname.length > 64 || Buffer.byteLength(pass, 'utf8') > 1024) return res.status(400).json({ error: 'ข้อมูลเข้าสู่ระบบยาวเกินกำหนด' });
+    const fpRaw = String((req.body || {}).fingerprint || '').trim();
+    const fp = fpRaw.length <= 128 ? (fpRaw || null) : null;
+    const ipLogin = clientIp(req);
+
+    // Persistent failure counts are shared across serverless instances.
+    const lockRows = await sql`
+      SELECT
+        COUNT(*) FILTER (WHERE username = ${uname} AND created_at > NOW() - INTERVAL '15 minutes')::int AS "userFailures",
+        COUNT(*) FILTER (WHERE ip_address = ${ipLogin} AND created_at > NOW() - INTERVAL '15 minutes')::int AS "ipFailures"
+      FROM security_events
+      WHERE event_type = 'login_failed'
+        AND created_at > NOW() - INTERVAL '15 minutes'
+        AND (username = ${uname} OR ip_address = ${ipLogin})
+    `;
+    const userFailures = Number(lockRows[0]?.userFailures || 0);
+    const ipFailures = Number(lockRows[0]?.ipFailures || 0);
+    if (userFailures >= 8 || ipFailures >= 50) {
+      await logSecurityEvent({ eventType: 'login_rate_limited', username: uname, fingerprint: fp, ip: ipLogin, detail: userFailures >= 8 ? 'username_threshold' : 'ip_threshold' });
+      return res.status(429).json({ error: 'พยายามเข้าสู่ระบบไม่สำเร็จหลายครั้ง กรุณารอ 15 นาที' });
     }
+
+    const banHit = await isBanned({ username: uname, fingerprint: fp, ip: ipLogin });
+    if (banHit) {
+      await logSecurityEvent({ eventType: 'blocked_login', username: uname, fingerprint: fp, ip: ipLogin, detail: banHit.reason });
+      return res.status(403).json({ error: 'บัญชีหรืออุปกรณ์นี้ถูกระงับการใช้งาน', banned: true });
+    }
+
     const rows = await sql`
       SELECT username, password_hash, display_name AS name, role, avatar,
              is_admin AS "isAdmin", can_view_monitoring AS "canViewMonitoring",
              description AS desc
-      FROM users WHERE username = ${uname}
+      FROM users WHERE username = ${uname} LIMIT 1
     `;
     if (!rows.length) {
+      await bcrypt.compare(pass, DUMMY_PASSWORD_HASH);
+      await sql`
+        INSERT INTO security_events (event_type, username, ip_address, detail)
+        VALUES ('login_failed', ${uname}, ${ipLogin}, 'invalid_credentials')
+      `;
       return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
     }
+
     const u = rows[0];
     let ok = false;
     if (u.password_hash && u.password_hash.startsWith('$2')) {
       ok = await bcrypt.compare(pass, u.password_hash);
-      // Gradually upgrade legacy bcrypt cost without forcing a mass password reset.
       if (ok && bcrypt.getRounds(u.password_hash) < 12) {
         const strongerHash = await bcrypt.hash(pass, 12);
         await sql`UPDATE users SET password_hash = ${strongerHash} WHERE username = ${uname}`;
       }
     } else {
-      // One-time migration for legacy plaintext rows, removed after a successful login.
       ok = u.password_hash === pass;
       if (ok) {
         const hashed = await bcrypt.hash(pass, 12);
         await sql`UPDATE users SET password_hash = ${hashed} WHERE username = ${uname}`;
+        await logSecurityEvent({ eventType: 'legacy_password_upgraded', username: uname, ip: ipLogin, detail: 'Legacy password upgraded to bcrypt cost 12' });
       }
     }
-    if (!ok) return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
 
-    const fp = (req.body || {}).fingerprint || null;
-    const ipLogin = clientIp(req);
-    const banHit = await isBanned({ fingerprint: fp, ip: ipLogin });
-    if (banHit) {
-      await logSecurityEvent({ eventType: 'blocked_login', username: uname, fingerprint: fp, ip: ipLogin, detail: banHit.reason });
-      return res.status(403).json({ error: banHit.reason || 'บัญชีหรืออุปกรณ์นี้ถูกระงับการใช้งาน', banned: true });
+    if (!ok) {
+      await sql`
+        INSERT INTO security_events (event_type, username, ip_address, detail)
+        VALUES ('login_failed', ${uname}, ${ipLogin}, 'invalid_credentials')
+      `;
+      return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
     }
 
     const profile = {
       name: u.name, role: u.role, avatar: u.avatar,
       isAdmin: u.isAdmin, canViewMonitoring: u.canViewMonitoring, desc: u.desc
     };
-    const token = signToken({
-      username: u.username, role: u.role,
-      isAdmin: u.isAdmin, canViewMonitoring: u.canViewMonitoring
-    });
+    const token = signToken({ username: u.username });
+    const claims = jwt.decode(token);
+    await sql`
+      INSERT INTO security_events (event_type, username, fingerprint, ip_address, detail)
+      VALUES ('auth_session_issued', ${u.username}, ${fp}, ${ipLogin}, ${'jti:' + claims.jti})
+    `;
     res.json({ username: u.username, profile, token });
+  } catch (err) {
+    safeError(res, err);
+  }
+});
+
+app.post('/api/logout', authRequired, async (req, res) => {
+  try {
+    if (!needDb(res)) return;
+    await sql`
+      INSERT INTO security_events (event_type, username, ip_address, detail)
+      VALUES ('auth_session_revoked', ${req.user.sub}, ${clientIp(req)}, ${'jti:' + req.user.jti})
+    `;
+    return res.json({ ok: true });
   } catch (err) {
     safeError(res, err);
   }
@@ -1413,7 +1516,7 @@ app.delete('/api/doctor-item', authRequired, async (req, res) => {
 
 
 // ---------- Security / device / ban ----------
-app.post('/api/security-check', async (req, res) => {
+app.post('/api/security-check', securityCheckLimiter, async (req, res) => {
   try {
     if (!needDb(res)) return;
     const { fingerprint } = req.body || {};
@@ -1441,7 +1544,11 @@ app.post('/api/device-report', authRequired, async (req, res) => {
   try {
     if (!needDb(res)) return;
     const { fingerprint, userAgent, screen, platform, language } = req.body || {};
-    if (!fingerprint) return res.status(400).json({ error: 'ไม่มี fingerprint' });
+    if (typeof fingerprint !== 'string' || !fingerprint.trim() || fingerprint.length > 128) return res.status(400).json({ error: 'fingerprint ไม่ถูกต้อง' });
+    if (typeof userAgent === 'string' && userAgent.length > 512) return res.status(400).json({ error: 'userAgent ยาวเกินกำหนด' });
+    if (typeof screen === 'string' && screen.length > 40) return res.status(400).json({ error: 'screen ยาวเกินกำหนด' });
+    if (typeof platform === 'string' && platform.length > 100) return res.status(400).json({ error: 'platform ยาวเกินกำหนด' });
+    if (typeof language === 'string' && language.length > 35) return res.status(400).json({ error: 'language ยาวเกินกำหนด' });
     const ip = clientIp(req);
     const ban = await isBanned({ fingerprint, ip });
     if (ban) {
@@ -1702,20 +1809,24 @@ app.post('/api/security-ban', authRequired, async (req, res) => {
     if (!needDb(res)) return;
     if (!req.user.isAdmin) return res.status(403).json({ error: 'เฉพาะแอดมิน' });
     const { fingerprint, ipAddress, username, reason } = req.body || {};
-    if (!fingerprint && !ipAddress && !username) {
-      return res.status(400).json({ error: 'ระบุ fingerprint หรือ IP หรือ username' });
-    }
+    const cleanFingerprint = typeof fingerprint === 'string' ? fingerprint.trim() : '';
+    const cleanUsername = typeof username === 'string' ? username.trim().toLowerCase() : '';
+    const cleanIp = typeof ipAddress === 'string' ? ipAddress.trim() : '';
+    const cleanReason = typeof reason === 'string' ? reason.trim() : 'ละเมิดกฎ';
+    if (!cleanFingerprint && !cleanIp && !cleanUsername) return res.status(400).json({ error: 'ระบุ fingerprint หรือ IP หรือ username' });
+    if (cleanFingerprint.length > 128 || cleanUsername.length > 64 || cleanIp.length > 45 || cleanReason.length > 240) return res.status(400).json({ error: 'ข้อมูลการระงับยาวเกินกำหนด' });
+    if (cleanIp && !net.isIP(cleanIp)) return res.status(400).json({ error: 'รูปแบบ IP ไม่ถูกต้อง' });
     const rows = await sql`
       INSERT INTO security_bans (fingerprint, ip_address, username, reason, banned_by, active)
-      VALUES (${fingerprint || null}, ${ipAddress || null}, ${username || null}, ${reason || 'ละเมิดกฎ'}, ${req.user.sub}, true)
+      VALUES (${cleanFingerprint || null}, ${cleanIp || null}, ${cleanUsername || null}, ${cleanReason || 'ละเมิดกฎ'}, ${req.user.sub}, true)
       RETURNING id
     `;
     await logSecurityEvent({
       eventType: 'ban_created',
       username: req.user.sub,
-      fingerprint,
-      ip: ipAddress,
-      detail: reason || ''
+      fingerprint: cleanFingerprint,
+      ip: cleanIp,
+      detail: cleanReason
     });
     res.json({ ok: true, id: rows[0].id });
   } catch (err) {
@@ -1736,37 +1847,27 @@ app.post('/api/security-unban', authRequired, async (req, res) => {
   }
 });
 
-app.post('/api/security-event', authRequired, async (req, res) => {
+app.post('/api/security-event', authRequired, securityEventLimiter, async (req, res) => {
   try {
     if (!needDb(res)) return;
     const { eventType, fingerprint, detail } = req.body || {};
-    const ip = clientIp(req);
+    const allowedEventTypes = new Set(['devtools_detected', 'tamper_detected', 'rule_violation', 'client_warning', 'client_event']);
+    if (typeof eventType !== 'string' || !allowedEventTypes.has(eventType)) return res.status(400).json({ error: 'ประเภทเหตุการณ์ไม่ถูกต้อง' });
+    if (fingerprint !== undefined && (typeof fingerprint !== 'string' || fingerprint.length > 128)) return res.status(400).json({ error: 'fingerprint ไม่ถูกต้อง' });
+    if (detail !== undefined && (typeof detail !== 'string' || detail.length > 500)) return res.status(400).json({ error: 'รายละเอียดเหตุการณ์ยาวเกินกำหนด' });
     await logSecurityEvent({
-      eventType: eventType || 'client_event',
+      eventType,
       username: req.user.sub,
-      fingerprint,
-      ip,
-      detail
+      fingerprint: fingerprint || null,
+      ip: clientIp(req),
+      detail: detail || ''
     });
-    // ถ้าเป็นเหตุร้ายแรง บล็อกทันที (admin เท่านั้นที่กำหนดจากฝั่ง server policy)
-    const severe = ['devtools_detected', 'tamper_detected', 'rule_violation'];
-    if (severe.includes(eventType) && fingerprint) {
-      // บันทึกเหตุการณ์ — การแบนจริงให้แอดมินกด หรือ auto-ban ถ้าต้องการ
-      // auto-ban เมื่อตรวจพบ devtools ซ้ำ
-      if (eventType === 'rule_violation') {
-        await sql`
-          INSERT INTO security_bans (fingerprint, ip_address, username, reason, banned_by, active)
-          VALUES (${fingerprint}, ${ip}, ${req.user.sub}, ${detail || 'ละเมิดกฎระบบ'}, 'system', true)
-        `;
-        return res.json({ ok: true, banned: true });
-      }
-    }
-    res.json({ ok: true });
+    // Browser telemetry is untrusted and audit-only; only server/admin policy may ban.
+    return res.json({ ok: true, banned: false });
   } catch (err) {
     safeError(res, err);
   }
 });
-
 
 app.get('/api/health', async (_req, res) => {
   try {
