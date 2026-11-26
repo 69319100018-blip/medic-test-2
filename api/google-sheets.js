@@ -298,7 +298,7 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
         protectedRange: {
           // C:L contains daily hours, total time, calculated pay and the 21-hour threshold.
           // Column M ("รับเงินแล้ว") intentionally remains editable.
-          range: { sheetId: weekSheet.sheetId, startRowIndex: 2, startColumnIndex: 2, endColumnIndex: 12 },
+          range: { sheetId: weekSheet.sheetId, startRowIndex: 2, startColumnIndex: 1, endColumnIndex: 12 },
           description: WEEKLY_DATA_PROTECTION_DESCRIPTION,
           warningOnly: false
         }
