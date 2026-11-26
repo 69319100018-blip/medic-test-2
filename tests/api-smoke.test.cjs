@@ -313,3 +313,34 @@ test('shift check-in and check-out enqueue only the signed-in user\'s own log fo
   assert.match(source, /safeGoogleQueueShift\(sql, username, result\.shift_log_id\)/);
   assert.match(source, /RETURNING shift\.id AS shift_log_id/);
 });
+
+
+test('personal Google Sheets endpoints require an authenticated user and a protected cron token', async () => {
+  const responses = await Promise.all([
+    fetch(`${apiUrl}/api/google-sheets/status`),
+    fetch(`${apiUrl}/api/google-sheets/connect`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+    fetch(`${apiUrl}/api/google-sheets/disconnect`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+    fetch(`${apiUrl}/api/google-sheets/retry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+    fetch(`${apiUrl}/api/cron/google-sheets-sync`)
+  ]);
+  for (const response of responses) assert.equal(response.status, 401);
+});
+
+test('personal Google Sheets integration uses least-privilege OAuth and encrypted per-user tokens', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'api', 'google-sheets.js'), 'utf8');
+  const api = fs.readFileSync(path.join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  assert.match(source, /https:\/\/www\.googleapis\.com\/auth\/drive\.file/);
+  assert.match(source, /createCipheriv\('aes-256-gcm'/);
+  assert.match(source, /code_challenge_method: 'S256'/);
+  assert.match(source, /access_type: 'offline'/);
+  assert.match(source, /WHERE username = \$\{req\.user\.sub\}/);
+  assert.match(source, /ON CONFLICT \(shift_log_id\)/);
+  assert.match(source, /app\.get\('\/api\/cron\/google-sheets-sync'/);
+  const statusStart = source.indexOf("app.get('/api/google-sheets/status'");
+  const connectStart = source.indexOf("app.post('/api/google-sheets/connect'", statusStart);
+  assert.doesNotMatch(source.slice(statusStart, connectStart), /refresh_token_encrypted/);
+  assert.match(api, /safeGoogleQueueShift\(sql, username, inserted\[0\]\.id\)/);
+  assert.match(api, /safeGoogleQueueShift\(sql, username, result\.shift_log_id\)/);
+});
