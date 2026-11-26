@@ -280,3 +280,36 @@ test('persistent login throttling does not let an attacker lock a username from 
   assert.match(source, /userIpFailures >= 8 \|\| ipFailures >= 50/);
   assert.doesNotMatch(source, /AS "userFailures"/);
 });
+
+
+test('Google Sheets endpoints require an authenticated Medic session and a cron secret', async () => {
+  const responses = await Promise.all([
+    fetch(`${apiUrl}/api/google-sheets/status`),
+    fetch(`${apiUrl}/api/google-sheets/connect`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+    fetch(`${apiUrl}/api/google-sheets/disconnect`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+    fetch(`${apiUrl}/api/google-sheets/retry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+    fetch(`${apiUrl}/api/cron/google-sheets-sync`)
+  ]);
+  for (const response of responses) assert.equal(response.status, 401);
+});
+
+test('Google Sheets integration isolates users and encrypts refresh tokens', () => {
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'api', 'google-sheets.js'), 'utf8');
+  assert.match(source, /https:\/\/www\.googleapis\.com\/auth\/drive\.file/);
+  assert.match(source, /createCipheriv\('aes-256-gcm'/);
+  assert.match(source, /code_challenge_method: 'S256'/);
+  assert.match(source, /access_type: 'offline'/);
+  assert.match(source, /WHERE username = \$\{req\.user\.sub\}/);
+  assert.match(source, /ON CONFLICT \(shift_log_id\)/);
+  assert.match(source, /google_sub/);
+  const statusStart = source.indexOf("app.get('/api/google-sheets/status'");
+  const statusEnd = source.indexOf("app.post('/api/google-sheets/connect'", statusStart);
+  assert.doesNotMatch(source.slice(statusStart, statusEnd), /refresh_token_encrypted/);
+});
+
+test('shift check-in and check-out enqueue only the signed-in user\'s own log for Sheets sync', () => {
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  assert.match(source, /safeGoogleQueueShift\(sql, username, inserted\[0\]\.id\)/);
+  assert.match(source, /safeGoogleQueueShift\(sql, username, result\.shift_log_id\)/);
+  assert.match(source, /RETURNING shift\.id AS shift_log_id/);
+});
