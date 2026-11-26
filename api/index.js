@@ -605,7 +605,6 @@ app.get('/api/me', authRequired, async (req, res) => {
     if (!needDb(res)) return;
     const rows = await sql`
       SELECT username, display_name AS name, role, avatar,
-             pay_grade AS "payGrade",
              is_admin AS "isAdmin", can_view_monitoring AS "canViewMonitoring",
              description AS desc
       FROM users WHERE username = ${req.user.sub}
@@ -631,7 +630,6 @@ app.get('/api/users', authRequired, async (_req, res) => {
     if (!needDb(res)) return;
     const rows = await sql`
       SELECT username, display_name AS name, role, avatar,
-             pay_grade AS "payGrade",
              is_admin AS "isAdmin", can_view_monitoring AS "canViewMonitoring",
              description AS desc
       FROM users ORDER BY username
