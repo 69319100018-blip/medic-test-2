@@ -10,7 +10,8 @@
 require('dotenv').config();
 const express = require('express');
 const crypto = require('node:crypto');
-const { registerGoogleSheetsRoutes, safeGoogleQueueShift, safeGoogleRefreshUserSheets, isValidPayGrade } = require('./google-sheets');
+const { registerGoogleSheetsRoutes, safeGoogleQueueShift, safeGoogleRefreshUserSheets } = require('./google-sheets');
+const { getPayrollInfoForRole } = require('./pay-grade');
 const net = require('node:net');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -430,7 +431,7 @@ app.post('/api/user-role', authRequired, async (req, res) => {
     if (!needDb(res)) return;
     if (!req.user.isAdmin) return res.status(403).json({ error: 'เฉพาะแอดมินเท่านั้น' });
 
-    const { username, role, isAdmin, canViewMonitoring, description, payGrade } = req.body || {};
+    const { username, role, isAdmin, canViewMonitoring, description } = req.body || {};
     const uname = String(username || '').trim().toLowerCase();
     if (!uname || uname.length > 64) return res.status(400).json({ error: 'ชื่อผู้ใช้ไม่ถูกต้อง' });
 
@@ -438,8 +439,7 @@ app.post('/api/user-role', authRequired, async (req, res) => {
     const hasAdmin = isAdmin !== undefined;
     const hasMonitoring = canViewMonitoring !== undefined;
     const hasDescription = description !== undefined;
-    const hasPayGrade = payGrade !== undefined;
-    if (!hasRole && !hasAdmin && !hasMonitoring && !hasDescription && !hasPayGrade) {
+    if (!hasRole && !hasAdmin && !hasMonitoring && !hasDescription) {
       return res.status(400).json({ error: 'ไม่มีข้อมูลสิทธิ์ที่ต้องการแก้ไข' });
     }
 
@@ -463,13 +463,6 @@ app.post('/api/user-role', authRequired, async (req, res) => {
       }
       nextDescription = description;
     }
-    let nextPayGrade = null;
-    if (hasPayGrade) {
-      if (payGrade !== null && payGrade !== '' && (typeof payGrade !== 'string' || !isValidPayGrade(payGrade))) {
-        return res.status(400).json({ error: 'ยศค่าตอบแทนไม่อยู่ในรายการที่กำหนด' });
-      }
-      nextPayGrade = payGrade === null || payGrade === '' ? null : payGrade;
-    }
     if (uname === req.user.sub && isAdmin === false) {
       return res.status(400).json({ error: 'ไม่สามารถถอดสิทธิ์แอดมินของตัวเองได้' });
     }
@@ -480,18 +473,18 @@ app.post('/api/user-role', authRequired, async (req, res) => {
       SET role = COALESCE(${nextRole}, role),
           is_admin = COALESCE(${hasAdmin ? isAdmin : null}, is_admin),
           can_view_monitoring = COALESCE(${hasMonitoring ? canViewMonitoring : null}, can_view_monitoring),
-          description = COALESCE(${nextDescription}, description),
-          pay_grade = CASE WHEN ${hasPayGrade} THEN ${nextPayGrade} ELSE pay_grade END
+          description = COALESCE(${nextDescription}, description)
       WHERE username = ${uname}
       RETURNING username, display_name AS name, role, avatar,
                 is_admin AS "isAdmin", can_view_monitoring AS "canViewMonitoring",
-                description AS desc, pay_grade AS "payGrade"
+                description AS desc
     `;
     if (!rows.length) return res.status(404).json({ error: 'ไม่พบผู้ใช้' });
-    if (hasPayGrade) {
+    if (hasRole) {
       safeGoogleRefreshUserSheets(sql, uname).catch(() => {});
     }
-    return res.json({ ok: true, user: rows[0] });
+    const payroll = getPayrollInfoForRole(rows[0].role);
+    return res.json({ ok: true, user: { ...rows[0], payGrade: payroll.grade, payRate: payroll.rate } });
   } catch (err) {
     safeError(res, err);
   }
@@ -536,7 +529,6 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
     const rows = await sql`
       SELECT username, password_hash, display_name AS name, role, avatar,
-             pay_grade AS "payGrade",
              is_admin AS "isAdmin", can_view_monitoring AS "canViewMonitoring",
              description AS desc
       FROM users WHERE username = ${uname} LIMIT 1
@@ -575,8 +567,10 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
     }
 
+    const payroll = getPayrollInfoForRole(u.role);
     const profile = {
-      name: u.name, role: u.role, avatar: u.avatar, payGrade: u.payGrade,
+      name: u.name, role: u.role, avatar: u.avatar,
+      payGrade: payroll.grade, payRate: payroll.rate,
       isAdmin: u.isAdmin, canViewMonitoring: u.canViewMonitoring, desc: u.desc
     };
     const token = signToken({ username: u.username });
@@ -621,7 +615,9 @@ app.get('/api/me', authRequired, async (req, res) => {
     res.json({
       username: u.username,
       profile: {
-        name: u.name, role: u.role, avatar: u.avatar, payGrade: u.payGrade,
+        name: u.name, role: u.role, avatar: u.avatar,
+        payGrade: getPayrollInfoForRole(u.role).grade,
+        payRate: getPayrollInfoForRole(u.role).rate,
         isAdmin: u.isAdmin, canViewMonitoring: u.canViewMonitoring, desc: u.desc
       }
     });
@@ -643,7 +639,9 @@ app.get('/api/users', authRequired, async (_req, res) => {
     const map = {};
     rows.forEach((r) => {
       map[r.username] = {
-        name: r.name, role: r.role, avatar: r.avatar, payGrade: r.payGrade,
+        name: r.name, role: r.role, avatar: r.avatar,
+        payGrade: getPayrollInfoForRole(r.role).grade,
+        payRate: getPayrollInfoForRole(r.role).rate,
         isAdmin: r.isAdmin, canViewMonitoring: r.canViewMonitoring, desc: r.desc
       };
     });
