@@ -1909,6 +1909,106 @@ function setDashboardPanelActive(target) {
     return nextPanel;
 }
 
+
+/* Payroll grade assignment — independent from access role/permissions. */
+const PAYROLL_GRADE_CHOICES = [
+    ['ผู้อำนวยการ', 'ผู้อำนวยการ · 45,000'],
+    ['รองผู้อำนวยการ', 'รองผู้อำนวยการ · 40,500'],
+    ['แพทย์ชำนาญ', 'แพทย์ชำนาญ · 36,000'],
+    ['แพทย์', 'แพทย์ · 31,500'],
+    ['นักเรียนแพทย์', 'นักเรียนแพทย์ · 27,000'],
+    ['Test 7 Day', 'Test 7 Day · 10,000'],
+    ['แพทย์อาสา', 'แพทย์อาสา · 10,000'],
+    ['ผู้ช่วย/เลขา', 'ผู้ช่วย/เลขา · 30,000'],
+    ['โบรัสรันคิว', 'โบรัสรันคิว · 45,000'],
+    ['ไปสตอรี่', 'ไปสตอรี่ · 30,000']
+];
+
+async function loadPayrollGrades() {
+    const list = document.getElementById('membersList');
+    if (!list || typeof apiLoadUsers !== 'function') return;
+    list.innerHTML = '<div class="payroll-members-loading">กำลังโหลดรายชื่อสมาชิก...</div>';
+
+    try {
+        const members = await apiLoadUsers();
+        const entries = Object.entries(members || {}).sort((a, b) =>
+            String(a[1]?.name || a[0]).localeCompare(String(b[1]?.name || b[0]), 'th')
+        );
+
+        if (!entries.length) {
+            list.innerHTML = '<div class="payroll-members-loading">ยังไม่มีสมาชิกในระบบ</div>';
+            return;
+        }
+
+        list.innerHTML = entries.map(([username, profile]) => {
+            const currentGrade = String(profile?.payGrade || '');
+            const options = PAYROLL_GRADE_CHOICES.map(([value, label]) =>
+                '<option value="' + escapeHtml(value) + '"' + (currentGrade === value ? ' selected' : '') + '>' +
+                escapeHtml(label) + '</option>'
+            ).join('');
+            const safeUsername = escapeHtml(username);
+            const safeName = escapeHtml(profile?.name || username);
+            const safeRole = escapeHtml(profile?.role || 'ไม่ระบุ Role');
+
+            return `
+                <article class="payroll-member-card" data-payroll-member="${safeUsername}">
+                    <div class="payroll-member-identity">
+                        <strong>${safeName}</strong>
+                        <span>${safeUsername} · สิทธิ์ระบบ: ${safeRole}</span>
+                    </div>
+                    <div class="payroll-grade-controls">
+                        <label>
+                            ยศสำหรับคำนวณค่าตอบแทน
+                            <select data-pay-grade-select>
+                                <option value="">ยังไม่กำหนดอัตรา</option>
+                                ${options}
+                            </select>
+                        </label>
+                        <button type="button" class="btn btn-primary btn-small" data-pay-grade-save>
+                            บันทึกยศ
+                        </button>
+                    </div>
+                </article>
+            `;
+        }).join('');
+
+        list.querySelectorAll('[data-pay-grade-save]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const card = button.closest('[data-payroll-member]');
+                const username = card?.dataset.payrollMember || '';
+                const select = card?.querySelector('[data-pay-grade-select]');
+                if (!username || !select || typeof apiUpdateUserRole !== 'function') return;
+
+                button.disabled = true;
+                const originalText = button.textContent;
+                button.textContent = 'กำลังบันทึก...';
+                try {
+                    const result = await apiUpdateUserRole({
+                        username,
+                        payGrade: select.value
+                    });
+                    if (userProfiles[username]) {
+                        userProfiles[username].payGrade = result?.user?.payGrade || select.value || null;
+                    }
+                    showAlert(
+                        'บันทึกยศค่าตอบแทนแล้ว',
+                        select.value ? 'ระบบจะใช้อัตรานี้คำนวณสรุปเงินเดือนใน Google Sheets ของสมาชิก' : 'ล้างอัตราค่าตอบแทนแล้ว ระบบจะเว้นยอดเงินไว้จนกว่าจะกำหนดยศใหม่',
+                        'success'
+                    );
+                } catch (err) {
+                    showAlert('บันทึกยศไม่สำเร็จ', err.message || 'กรุณาลองใหม่อีกครั้ง', 'error');
+                } finally {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            });
+        });
+    } catch (err) {
+        list.innerHTML = '<div class="payroll-members-loading is-error">' +
+            escapeHtml(err.message || 'ไม่สามารถโหลดรายชื่อสมาชิกได้') + '</div>';
+    }
+}
+
 function handleMenuSwitch(event) {
     const target = event.currentTarget.dataset.target;
     if (!target) return;
@@ -1928,6 +2028,7 @@ function handleMenuSwitch(event) {
     setDashboardPanelActive(target);
 
     if (target === 'leaveRequestsSection') loadLeaveRequests();
+    if (target === 'membersSection') loadPayrollGrades();
 
     // Shared data is hydrated during dashboard startup. Do not refetch it
     // every time a user opens the stock history panel.
