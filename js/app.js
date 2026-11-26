@@ -300,6 +300,134 @@ function initCurrentDutyPanel() {
     document.getElementById('btnCurrentDutyRefresh')?.addEventListener('click', loadCurrentDuty);
 }
 
+/* Personal Google Sheets */
+let googleSheetsUiReady = false;
+let googleSheetsBusy = false;
+
+function renderGoogleSheetsStatus(data) {
+  const badge = document.getElementById('googleSheetsBadge');
+  const status = document.getElementById('googleSheetsStatus');
+  const connect = document.getElementById('btnGoogleSheetsConnect');
+  const open = document.getElementById('lnkGoogleSheetsOpen');
+  const retry = document.getElementById('btnGoogleSheetsRetry');
+  const disconnect = document.getElementById('btnGoogleSheetsDisconnect');
+  const footnote = document.getElementById('googleSheetsFootnote');
+  if (!badge || !status || !connect) return;
+  const connected = data?.connected === true;
+  const reauth = data?.status === 'reauth_required';
+  badge.className = 'google-sheets-badge ' + (connected ? 'connected' : (reauth ? 'warning' : 'disconnected'));
+  badge.textContent = connected ? 'เชื่อมต่อแล้ว' : (reauth ? 'ต้องเชื่อมต่อใหม่' : 'ยังไม่เชื่อมต่อ');
+  if (!data?.configured) {
+    status.textContent = 'ผู้ดูแลระบบยังตั้งค่า Google OAuth ไม่ครบ จึงยังเชื่อมต่อไม่ได้';
+    connect.disabled = true;
+    footnote.textContent = 'เมื่อระบบพร้อม คุณจะเชื่อมบัญชี Google ส่วนตัวและสร้างไฟล์ของตัวเองได้';
+  } else if (connected) {
+    status.textContent = 'เชื่อมต่อบัญชี ' + (data.googleEmail || 'Google Account') + ' แล้ว';
+    connect.disabled = false;
+    footnote.textContent = data.lastSyncedAt
+      ? 'ซิงก์ล่าสุด ' + new Date(data.lastSyncedAt).toLocaleString('th-TH')
+      : 'กำลังรอการซิงก์ข้อมูล';
+    if (data.lastError) footnote.textContent += ' · มีรายการที่ต้องตรวจสอบ';
+  } else {
+    status.textContent = reauth
+      ? 'การอนุญาต Google หมดอายุหรือถูกเพิกถอน กรุณาเชื่อมต่อใหม่'
+      : 'ยังไม่ได้เชื่อมบัญชี Google ระบบจะสร้าง Spreadsheet ใน Drive ของคุณเมื่อเชื่อมต่อ';
+    connect.disabled = false;
+    footnote.textContent = data.lastError || 'แต่ละบัญชีจะมีไฟล์ส่วนตัวของตัวเอง ไม่มีการรวมข้อมูลกับผู้ใช้คนอื่น';
+  }
+  connect.classList.toggle('hidden', connected);
+  connect.innerHTML = reauth ? '<i class="bi bi-google"></i> เชื่อมต่อ Google ใหม่' : '<i class="bi bi-google"></i> เชื่อมต่อ Google';
+  if (open) {
+    const href = String(data?.spreadsheetUrl || '');
+    const safe = /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]+/.test(href);
+    open.href = safe ? href : '#';
+    open.classList.toggle('hidden', !connected || !safe);
+  }
+  retry?.classList.toggle('hidden', !connected);
+  disconnect?.classList.toggle('hidden', !connected);
+}
+
+async function loadGoogleSheetsStatus() {
+  const status = document.getElementById('googleSheetsStatus');
+  if (!status || typeof apiGoogleSheetsStatus !== 'function') return;
+  try { renderGoogleSheetsStatus(await apiGoogleSheetsStatus()); }
+  catch (err) { status.textContent = err.message || 'ไม่สามารถตรวจสอบสถานะ Google Sheets ได้'; }
+}
+
+async function connectPersonalGoogleSheets() {
+  if (googleSheetsBusy) return;
+  googleSheetsBusy = true;
+  const button = document.getElementById('btnGoogleSheetsConnect');
+  if (button) button.disabled = true;
+  try {
+    const result = await apiGoogleSheetsConnect();
+    const target = new URL(result.url);
+    if (target.protocol !== 'https:' || target.hostname !== 'accounts.google.com') throw new Error('ลิงก์เชื่อมต่อ Google ไม่ถูกต้อง');
+    window.location.assign(target.toString());
+  } catch (err) {
+    showAlert('เชื่อมต่อ Google ไม่สำเร็จ', err.message || 'กรุณาลองใหม่อีกครั้ง', 'error');
+    if (button) button.disabled = false;
+  } finally { googleSheetsBusy = false; }
+}
+
+async function disconnectPersonalGoogleSheets() {
+  if (googleSheetsBusy) return;
+  const confirmed = window.Swal
+    ? (await Swal.fire({
+        title: 'ยกเลิกการเชื่อมต่อ Google?',
+        text: 'ระบบจะหยุดซิงก์เวลาเวรไปยัง Google Sheets ของคุณ',
+        icon: 'warning', showCancelButton: true,
+        confirmButtonText: 'ยกเลิกการเชื่อมต่อ', cancelButtonText: 'กลับ'
+      })).isConfirmed
+    : window.confirm('ยกเลิกการเชื่อมต่อ Google Sheets ของคุณหรือไม่?');
+  if (!confirmed) return;
+  googleSheetsBusy = true;
+  try {
+    await apiGoogleSheetsDisconnect();
+    showAlert('ยกเลิกการเชื่อมต่อแล้ว', 'ระบบจะไม่ส่งเวลาเวรใหม่ไปยัง Google Sheets', 'success');
+    await loadGoogleSheetsStatus();
+  } catch (err) {
+    showAlert('ยกเลิกการเชื่อมต่อไม่สำเร็จ', err.message || 'กรุณาลองใหม่', 'error');
+  } finally { googleSheetsBusy = false; }
+}
+
+async function retryPersonalGoogleSheets() {
+  if (googleSheetsBusy) return;
+  googleSheetsBusy = true;
+  try {
+    const result = await apiGoogleSheetsRetry();
+    showAlert('ส่งรายการซิงก์แล้ว', 'พบ ' + Number(result.queued || 0) + ' รายการ · ประมวลผลทันที ' + Number(result.processed || 0) + ' รายการ', 'success');
+    await loadGoogleSheetsStatus();
+  } catch (err) {
+    showAlert('ซิงก์ไม่สำเร็จ', err.message || 'กรุณาลองใหม่', 'error');
+  } finally { googleSheetsBusy = false; }
+}
+
+function initGoogleSheetsPanel() {
+  if (!document.getElementById('googleSheetsPanel') || googleSheetsUiReady) return;
+  googleSheetsUiReady = true;
+  document.getElementById('btnGoogleSheetsConnect')?.addEventListener('click', connectPersonalGoogleSheets);
+  document.getElementById('btnGoogleSheetsDisconnect')?.addEventListener('click', disconnectPersonalGoogleSheets);
+  document.getElementById('btnGoogleSheetsRetry')?.addEventListener('click', retryPersonalGoogleSheets);
+  const url = new URL(window.location.href);
+  const result = url.searchParams.get('googleSheets');
+  if (result) {
+    const messages = {
+      connected: ['เชื่อมต่อ Google Sheets สำเร็จ', 'สร้างไฟล์ส่วนตัวและเตรียมซิงก์ประวัติของคุณแล้ว', 'success'],
+      denied: ['ยกเลิกการอนุญาต', 'คุณยังไม่ได้อนุญาตให้ Medic Shift Log เข้าถึง Google Sheets', 'warning'],
+      expired: ['ลิงก์เชื่อมต่อหมดอายุ', 'กรุณากดเชื่อมต่อ Google อีกครั้ง', 'warning'],
+      refresh_token_missing: ['Google ไม่ส่งสิทธิ์ Offline', 'กรุณาเพิกถอนสิทธิ์เดิมใน Google Account แล้วเชื่อมต่อใหม่', 'warning'],
+      google_account_in_use: ['บัญชี Google นี้ถูกใช้งานแล้ว', 'บัญชี Google หนึ่งบัญชีเชื่อมต่อกับผู้ใช้ Medic ได้เพียงหนึ่งบัญชี', 'error'],
+      error: ['เชื่อมต่อไม่สำเร็จ', 'กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ', 'error']
+    };
+    const message = messages[result] || ['เชื่อมต่อ Google ไม่สำเร็จ', 'กรุณาลองใหม่', 'error'];
+    showAlert(message[0], message[1], message[2]);
+    url.searchParams.delete('googleSheets');
+    window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+  }
+  loadGoogleSheetsStatus();
+}
+
 /* ---------- Login video background + mouse focus ---------- */
 const loginVideoPlaylist = [
     'assets/videos/bg1-h264.mp4',
@@ -1897,6 +2025,7 @@ async function initDashboard() {
     renderDoctors();
     initCalendarFeature();
     initCurrentDutyPanel();
+    initGoogleSheetsPanel();
     updateActionButtons();
     if (!canViewMonitoring(currentUser)) {
         document.getElementById('adminSection')?.classList.add('hidden');
