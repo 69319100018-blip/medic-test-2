@@ -172,7 +172,7 @@ function thaiWeekdayLabel(value) {
 
 function weeklyTabName(weekStart) {
   return ('สัปดาห์ ' + thaiDateLabel(weekStart) + ' - ' + thaiDateLabel(addIsoDays(weekStart, 6)))
-    .replaceAll('\\\\', '').replaceAll('/', '').replaceAll(':', '').replaceAll('?', '').replaceAll('*', '').replaceAll('[', '').replaceAll(']', '')
+    .replaceAll(String.fromCharCode(92), '').replaceAll('/', '').replaceAll(':', '').replaceAll('?', '').replaceAll('*', '').replaceAll('[', '').replaceAll(']', '')
     .slice(0, 99);
 }
 
@@ -455,7 +455,7 @@ async function syncWeeklyWeek(sql, token, connection, profile, weekStart) {
   ]]);
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'N3:O3'), [[
     profile.payGrade || '',
-    '=IFERROR(VLOOKUP(N3,ยศ!$A$2:$B$11,2,FALSE),"")'
+    '=IFERROR(VLOOKUP(N3,\\'ยศ\\'!$A$2:$B$11,2,FALSE),"")'
   ]]);
 }
 
