@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <title>นโยบายความเป็นส่วนตัว | Medic Shift Log</title>
+  <style>
+    :root{color-scheme:light;--ink:#183047;--muted:#52677b;--line:#d8e4ee;--panel:#fff;--bg:#f2f7fb;--blue:#246b9b}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 system-ui,-apple-system,"Segoe UI",sans-serif}
+    header{background:#e5f1fa;border-bottom:1px solid var(--line);padding:28px 20px}
+    .wrap{max-width:920px;margin:0 auto;padding:24px 20px 50px}
+    .brand{font-size:13px;font-weight:800;letter-spacing:.08em;color:var(--blue)}
+    h1{font-size:clamp(27px,5vw,38px);line-height:1.25;margin:8px 0}
+    h2{font-size:20px;line-height:1.4;margin:28px 0 8px}
+    p,li{color:var(--muted)}ul{padding-left:24px}a{color:var(--blue)}
+    .meta{font-size:13px;color:var(--muted)}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:clamp(18px,4vw,30px);box-shadow:0 8px 28px rgba(27,64,93,.05)}
+    .en{border-top:1px solid var(--line);margin-top:32px;padding-top:24px}
+    nav{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:14px}
+    footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px}
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap" style="padding-top:0;padding-bottom:0">
+    <div class="brand">MEDIC SHIFT LOG</div>
+    <h1>นโยบายความเป็นส่วนตัว</h1>
+    <div class="meta">ปรับปรุงล่าสุด: 26 พฤศจิกายน 2569</div>
+    <nav><a href="/">หน้าแรก</a><a href="/terms-of-service.html">ข้อกำหนดการใช้งาน</a></nav>
+  </div>
+</header>
+<main class="wrap">
+  <article class="card">
+    <p>นโยบายนี้อธิบายวิธีที่ Medic Shift Log (“ระบบ”, “เรา”) เก็บ ใช้ เปิดเผย และปกป้องข้อมูลเมื่อคุณใช้ระบบบันทึกเวรและเครื่องมือจัดการงานของทีมแพทย์ การเข้าใช้หรือเชื่อมต่อ Google เป็นทางเลือกตามฟังก์ชันที่คุณเลือกใช้</p>
+
+    <h2>1. ข้อมูลที่เราเก็บ</h2>
+    <ul>
+      <li><strong>ข้อมูลบัญชี:</strong> ชื่อผู้ใช้ ชื่อที่แสดง รหัสผ่านในรูปแบบแฮช บทบาท/สิทธิ์ คำอธิบาย และรูปโปรไฟล์ (ถ้ามี)</li>
+      <li><strong>ข้อมูลการปฏิบัติงาน:</strong> เวลาและวันที่เข้า–ออกเวร ระยะเวลาปฏิบัติงาน และข้อมูลที่คุณหรือผู้ดูแลบันทึกผ่านฟังก์ชัน เช่น คำขอลา ปฏิทิน เงินกองกลาง สต็อก และทะเบียนรถ</li>
+      <li><strong>ข้อมูลความปลอดภัยและอุปกรณ์:</strong> IP address, device fingerprint, user agent, platform, screen information, language, เวลาใช้งาน และเหตุการณ์ด้านความปลอดภัย เพื่อยืนยันตัวตน ป้องกันการใช้บัญชีโดยมิชอบ และตรวจสอบปัญหา</li>
+      <li><strong>ข้อมูลจาก Google เมื่อคุณเชื่อมต่อ:</strong> อีเมล Google และตัวระบุบัญชี Google, ข้อมูล Spreadsheet ที่ระบบสร้างให้ และ Refresh Token ที่ใช้รักษาการเชื่อมต่อ</li>
+    </ul>
+
+    <h2>2. วิธีใช้ข้อมูล</h2>
+    <p>เราใช้ข้อมูลเพื่อยืนยันตัวตน จัดการบัญชีและสิทธิ์ บันทึกและแสดงเวลาเข้า–ออกเวร คำนวณสรุปเวลาตามฟังก์ชันที่เปิดใช้ จัดการคำขอลาและงานภายในทีม ส่งการแจ้งเตือนที่ผู้ดูแลตั้งค่าไว้ ป้องกันการทุจริต/การเข้าถึงโดยไม่ได้รับอนุญาต และดูแลระบบ</p>
+
+    <h2>3. การเข้าถึงและใช้ข้อมูล Google</h2>
+    <p>เมื่อคุณกดเชื่อมต่อ Google ระบบจะขอสิทธิ์ <code>openid</code>, <code>email</code> และ <code>https://www.googleapis.com/auth/drive.file</code> เพื่อยืนยันบัญชี อ่านอีเมลบัญชี และสร้างหรือจัดการไฟล์ Google Sheets ที่สร้างโดย Medic Shift Log หรือไฟล์ที่ผู้ใช้เลือกให้แอปเข้าถึงตามขอบเขตของ Google</p>
+    <ul>
+      <li>ระบบสร้าง Spreadsheet ส่วนตัวใน Google Drive ของบัญชีที่คุณเลือกเชื่อม และบันทึกข้อมูลการเข้า–ออกเวร/สรุปรายสัปดาห์ของบัญชี Medic ที่เชื่อมอยู่</li>
+      <li>ระบบไม่ได้ร้องขอสิทธิ์อ่านไฟล์ทั้งหมดใน Google Drive และไม่ได้ใช้ข้อมูล Google เพื่อโฆษณา ขายข้อมูล หรือสร้างโปรไฟล์โฆษณา</li>
+      <li>Refresh Token ถูกเข้ารหัสด้วย AES-256-GCM ก่อนบันทึกในฐานข้อมูล และใช้ฝั่งเซิร์ฟเวอร์เพื่อซิงก์ข้อมูลไปยัง Spreadsheet ของคุณ</li>
+      <li>เราไม่เปิดเผยข้อมูล Google ของคุณแก่บุคคลภายนอก เว้นแต่จำเป็นต่อการให้บริการที่คุณร้องขอ การรักษาความปลอดภัย การปฏิบัติตามกฎหมาย หรือเมื่อคุณสั่งแบ่งปันไฟล์ด้วยตนเอง</li>
+      <li>สิทธิ์และการแบ่งปัน Spreadsheet หลังจากสร้างแล้วอยู่ภายใต้การตั้งค่า Google Drive ของคุณ</li>
+    </ul>
+    <p>คุณยกเลิกการเชื่อมต่อ Google ได้จากหน้า Google Sheets ในระบบ เมื่อยกเลิก ระบบจะพยายามเพิกถอน Token และลบ Token ที่เก็บไว้จากการเชื่อมต่อนั้น แต่ไฟล์ Spreadsheet ที่สร้างไปแล้วจะยังคงอยู่ใน Google Drive ของคุณจนกว่าคุณจะลบเอง</p>
+
+    <h2>4. การจัดเก็บและผู้ให้บริการ</h2>
+    <p>ข้อมูลบัญชีและข้อมูลปฏิบัติงานจัดเก็บในฐานข้อมูล Neon PostgreSQL และระบบให้บริการผ่าน Vercel รหัสผ่านจัดเก็บเป็นแฮช ไม่เก็บเป็นข้อความธรรมดา หากผู้ดูแลเปิดใช้การแจ้งเตือน Discord ข้อมูลเหตุการณ์ที่เกี่ยวข้องกับการปฏิบัติงานอาจถูกส่งไปยัง Discord webhook ของทีมเพื่อแจ้งเตือน ผู้ให้บริการเหล่านี้ประมวลผลข้อมูลเท่าที่จำเป็นต่อการให้บริการ โฮสต์ จัดเก็บ ซิงก์ หรือส่งการแจ้งเตือน</p>
+
+    <h2>5. การเปิดเผยข้อมูลและสิทธิ์เข้าถึง</h2>
+    <p>ผู้ใช้ที่ได้รับสิทธิ์ในระบบอาจเห็นข้อมูลทีมตามบทบาทและสิทธิ์ที่ผู้ดูแลกำหนด ผู้ดูแลระบบอาจเข้าถึงข้อมูลที่จำเป็นต่อการจัดการทีม การตรวจสอบความถูกต้อง และความปลอดภัย เราไม่ขายข้อมูลส่วนบุคคล</p>
+
+    <h2>6. ระยะเวลาจัดเก็บและคำขอลบข้อมูล</h2>
+    <p>เราเก็บข้อมูลเท่าที่จำเป็นต่อการให้บริการ การตรวจสอบย้อนหลัง และความปลอดภัยของระบบ ระบบยังไม่มีเครื่องมือลบบัญชีด้วยตนเองในหน้าเว็บ หากต้องการขอเข้าถึง แก้ไข หรือลบข้อมูล โปรดติดต่อผู้ดูแลระบบผ่านช่องทางติดต่ออย่างเป็นทางการของทีม ผู้ดูแลจะตรวจสอบคำขอและข้อผูกพันด้านการตรวจสอบ/กฎหมายก่อนดำเนินการ</p>
+
+    <h2>7. ความปลอดภัย</h2>
+    <p>เราใช้มาตรการตามลักษณะระบบ เช่น HTTPS การแฮชรหัสผ่าน การเข้ารหัส Google Refresh Token การตรวจสอบสิทธิ์และเซสชัน การจำกัดอัตราคำขอ และบันทึกเหตุการณ์ด้านความปลอดภัย อย่างไรก็ตาม ไม่มีวิธีส่งหรือจัดเก็บข้อมูลใดที่รับประกันความปลอดภัยได้อย่างสมบูรณ์</p>
+
+    <h2>8. เด็กและข้อมูลสุขภาพ</h2>
+    <p>ระบบนี้จัดทำเพื่อบันทึกการปฏิบัติงานของทีม ไม่ใช่ระบบเวชระเบียนหรือระบบจัดเก็บข้อมูลผู้ป่วย โปรดอย่าบันทึกชื่อผู้ป่วย เลขประจำตัวผู้ป่วย ประวัติการรักษา หรือข้อมูลสุขภาพที่ระบุตัวบุคคลได้ลงในระบบ</p>
+
+    <h2>9. การเปลี่ยนแปลงนโยบาย</h2>
+    <p>เราอาจปรับปรุงนโยบายนี้เมื่อฟังก์ชันหรือวิธีประมวลผลข้อมูลเปลี่ยนแปลง โดยจะแสดงฉบับล่าสุดไว้ที่ URL นี้ การใช้งานต่อหลังวันที่มีผลใช้บังคับถือว่าคุณได้รับทราบนโยบายฉบับปรับปรุง</p>
+
+    <h2>10. ติดต่อ</h2>
+    <p>หากมีคำถามเกี่ยวกับความเป็นส่วนตัวหรือคำขอเกี่ยวกับข้อมูล โปรดติดต่อผู้ดูแล Medic Shift Log ผ่านช่องทางติดต่ออย่างเป็นทางการของทีมที่คุณสังกัด</p>
+
+    <section class="en" lang="en">
+      <h2>Privacy Policy (English)</h2>
+      <p>Medic Shift Log provides shift attendance and team operations tools. This policy explains the information processed when you use the service.</p>
+      <h2>Information we collect</h2>
+      <p>We process account details (username, display name, password hash, role and profile details); operational records (check-in/check-out timestamps and duration, leave requests, calendar entries, fund, inventory and vehicle records); and security/device data (IP address, device fingerprint, user agent, platform, screen details, language and security events).</p>
+      <h2>Google user data</h2>
+      <p>When you connect Google, we request the <code>openid</code>, <code>email</code> and <code>drive.file</code> scopes. We use these permissions to verify your Google identity, obtain your email address, and create or update the Medic Shift Log spreadsheet associated with your account. We do not request broad access to read all files in your Google Drive. We use Google data only to provide the user-facing spreadsheet connection and synchronization features, for security, or as required by law. We do not sell Google user data or use it for advertising.</p>
+      <p>Your Google refresh token is encrypted at rest using AES-256-GCM. Disconnecting Google attempts to revoke the token and removes the stored token from the connection record. A spreadsheet already created remains in your Google Drive until you delete it. Its sharing permissions are governed by your Google Drive settings.</p>
+      <h2>Storage and sharing</h2>
+      <p>Application data is stored in Neon PostgreSQL and the service is hosted on Vercel. If team administrators enable Discord notifications, relevant operational event details may be sent to the team's Discord webhook. Authorized team users and administrators may access information according to their assigned permissions. We do not sell personal information.</p>
+      <h2>Retention and your choices</h2>
+      <p>We retain information for service operation, audit and security needs. Self-service account deletion is not currently available. Contact your team administrator to request access, correction or deletion; requests may be subject to operational, audit and legal requirements. You can disconnect Google from the Google Sheets section of the application.</p>
+      <h2>Security, health information and contact</h2>
+      <p>We use safeguards including HTTPS, password hashing, encrypted Google refresh tokens, access controls, session checks and security logs, but no system can guarantee absolute security. Medic Shift Log is not an electronic medical record; do not enter identifiable patient or health information. For privacy questions or data requests, contact your team administrator through the team's official contact channel.</p>
+    </section>
+  </article>
+</main>
+<footer>© 2026 Medic Shift Log</footer>
+</body>
+</html>
