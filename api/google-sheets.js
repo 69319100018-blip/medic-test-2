@@ -1,6 +1,7 @@
 
 'use strict';
 const crypto = require('node:crypto');
+const { PAY_GRADE_RATES, getPayrollInfoForRole } = require('./pay-grade');
 const SCOPES = ['openid', 'email', 'https://www.googleapis.com/auth/drive.file'];
 const TAB = 'บันทึกเวร';
 const MAX_ATTEMPTS = 10;
@@ -131,22 +132,9 @@ async function shiftValues(sql, username, shiftLogId) {
   return [String(r.id), r.date || '', r.name || username, r.role || '', r.checkInTime || '', r.checkOutTime || '', r.duration || '', r.checkOutTime ? 'ออกเวรแล้ว' : 'กำลังเข้าเวร'];
 }
 
-const PAY_GRADE_RATES = [
-  { grade: 'ผู้อำนวยการ', rate: 45000, note: 'สามารถทำงาน และ เข้าใจแพทย์ได้เป็นอย่างดี' },
-  { grade: 'รองผู้อำนวยการ', rate: 40500, note: 'ผู้ช่วยผู้อำนวยการใกล้เคียง กับ ผู้อำนวยการ' },
-  { grade: 'แพทย์ชำนาญ', rate: 36000, note: 'ผู้ช่วยดูแลหน่วยงานแพทย์' },
-  { grade: 'แพทย์', rate: 31500, note: 'แพทย์เข้าเวรเกิน 1 เดือน และ สอบขับฮอล์' },
-  { grade: 'นักเรียนแพทย์', rate: 27000, note: 'นักเรียนแพทย์ เข้าเวร 3ชม. ครบ 10วัน' },
-  { grade: 'Test 7 Day', rate: 10000, note: 'แพทย์ใหม่ / ฝึกหัด' },
-  { grade: 'แพทย์อาสา', rate: 10000, note: 'แพทย์อาสา' },
-  { grade: 'ผู้ช่วย/เลขา', rate: 30000, note: 'คอยช่วยเหลือและประสานงานแทนผู้อำนวยการ' },
-];
-const PAY_GRADE_OPTIONS = PAY_GRADE_RATES.map((item) => item.grade);
 const RANK_TAB = 'ยศ';
-
-function isValidPayGrade(value) {
-  return PAY_GRADE_OPTIONS.includes(String(value || ''));
-}
+const RANK_PROTECTION_DESCRIPTION = 'Medic Shift Log: database-controlled rank rates';
+const WEEKLY_RANK_PROTECTION_DESCRIPTION = 'Medic Shift Log: database-controlled weekly rank';
 
 function addIsoDays(value, days) {
   const date = new Date(String(value) + 'T00:00:00.000Z');
@@ -175,7 +163,7 @@ function weeklyTabName(weekStart) {
 }
 
 async function spreadsheetMetadata(token, spreadsheetId) {
-  return sheetsCall(token, spreadsheetId, 'GET', '?fields=sheets.properties(sheetId,title)');
+  return sheetsCall(token, spreadsheetId, 'GET', '?fields=sheets(properties(sheetId,title),protectedRanges(protectedRangeId,description,range))');
 }
 
 function sheetA1Range(title, cells) {
@@ -196,8 +184,10 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
   const weekTitle = weeklyTabName(weekStart);
   let metadata = await spreadsheetMetadata(token, spreadsheetId);
   let sheets = Array.isArray(metadata.sheets) ? metadata.sheets : [];
-  let rankSheet = sheets.find((sheet) => sheet.properties?.title === RANK_TAB)?.properties || null;
-  let weekSheet = sheets.find((sheet) => sheet.properties?.title === weekTitle)?.properties || null;
+  let rankSheetEntry = sheets.find((sheet) => sheet.properties?.title === RANK_TAB) || null;
+  let weekSheetEntry = sheets.find((sheet) => sheet.properties?.title === weekTitle) || null;
+  let rankSheet = rankSheetEntry?.properties || null;
+  let weekSheet = weekSheetEntry?.properties || null;
   const createRank = !rankSheet;
   const createWeek = !weekSheet;
   const requests = [];
@@ -239,23 +229,28 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
     }
     metadata = await spreadsheetMetadata(token, spreadsheetId);
     sheets = Array.isArray(metadata.sheets) ? metadata.sheets : [];
-    rankSheet = sheets.find((sheet) => sheet.properties?.title === RANK_TAB)?.properties || null;
-    weekSheet = sheets.find((sheet) => sheet.properties?.title === weekTitle)?.properties || null;
+    rankSheetEntry = sheets.find((sheet) => sheet.properties?.title === RANK_TAB) || null;
+    weekSheetEntry = sheets.find((sheet) => sheet.properties?.title === weekTitle) || null;
+    rankSheet = rankSheetEntry?.properties || null;
+    weekSheet = weekSheetEntry?.properties || null;
   } else {
-    rankSheet = sheets.find((sheet) => sheet.properties?.title === RANK_TAB)?.properties || null;
-    weekSheet = sheets.find((sheet) => sheet.properties?.title === weekTitle)?.properties || null;
+    rankSheetEntry = sheets.find((sheet) => sheet.properties?.title === RANK_TAB) || null;
+    weekSheetEntry = sheets.find((sheet) => sheet.properties?.title === weekTitle) || null;
+    rankSheet = rankSheetEntry?.properties || null;
+    weekSheet = weekSheetEntry?.properties || null;
   }
 
   if (!rankSheet?.sheetId || !weekSheet?.sheetId) {
     throw new Error('Google Sheets weekly tabs could not be initialized');
   }
 
+  const rankValues = [
+    ['ยศจาก Role ในฐานข้อมูล', 'อัตราตามยศ (บาท)', 'หมายเหตุ'],
+    ...PAY_GRADE_RATES.map((item) => [item.grade, item.rate, item.note])
+  ];
+  // Re-write canonical rates on every sync so edits in the user's spreadsheet do not become authoritative.
+  await updateSheetValues(token, spreadsheetId, RANK_TAB + '!A1:C' + rankValues.length, rankValues, 'RAW');
   if (createRank) {
-    const values = [
-      ['ยศ', 'อัตราตามยศ (บาท)', 'หมายเหตุ'],
-      ...PAY_GRADE_RATES.map((item) => [item.grade, item.rate, item.note])
-    ];
-    await updateSheetValues(token, spreadsheetId, RANK_TAB + '!A1:C' + values.length, values, 'RAW');
     await sheetsCall(token, spreadsheetId, 'POST', ':batchUpdate', {
       requests: [{
         repeatCell: {
@@ -271,6 +266,33 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
         }
       }]
     });
+  }
+
+  const protectionRequests = [];
+  if (!(rankSheetEntry?.protectedRanges || []).some((item) => item.description === RANK_PROTECTION_DESCRIPTION)) {
+    protectionRequests.push({
+      addProtectedRange: {
+        protectedRange: {
+          range: { sheetId: rankSheet.sheetId },
+          description: RANK_PROTECTION_DESCRIPTION,
+          warningOnly: false
+        }
+      }
+    });
+  }
+  if (!(weekSheetEntry?.protectedRanges || []).some((item) => item.description === WEEKLY_RANK_PROTECTION_DESCRIPTION)) {
+    protectionRequests.push({
+      addProtectedRange: {
+        protectedRange: {
+          range: { sheetId: weekSheet.sheetId, startRowIndex: 2, startColumnIndex: 13, endColumnIndex: 15 },
+          description: WEEKLY_RANK_PROTECTION_DESCRIPTION,
+          warningOnly: false
+        }
+      }
+    });
+  }
+  if (protectionRequests.length) {
+    await sheetsCall(token, spreadsheetId, 'POST', ':batchUpdate', { requests: protectionRequests });
   }
 
   if (createWeek) {
@@ -290,7 +312,7 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
       '=J3*24>=21',
       false,
       '',
-      "=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$9,2,FALSE),\"\")"
+      ''
     ];
     await updateSheetValues(
       token,
@@ -371,13 +393,14 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
 
 async function getPayrollProfile(sql, username) {
   const rows = await sql`
-    SELECT username, display_name AS name, role, pay_grade AS "payGrade",
+    SELECT username, display_name AS name, role,
       TO_CHAR((created_at AT TIME ZONE 'Asia/Bangkok')::date, 'YYYY-MM-DD') AS "registeredDate"
     FROM public.users
     WHERE username = ${username}
     LIMIT 1
   `;
-  return rows[0] || null;
+  const profile = rows[0] || null;
+  return profile ? { ...profile, payroll: getPayrollInfoForRole(profile.role) } : null;
 }
 
 async function getCurrentWeekStart(sql) {
@@ -458,8 +481,8 @@ async function syncWeeklyWeek(sql, token, connection, profile, weekStart) {
     '=J3*24>=21'
   ]]);
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'N3:O3'), [[
-    profile.payGrade || '',
-    "=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$9,2,FALSE),\"\")"
+    profile.payroll?.grade || ('ไม่พบยศตาม Role: ' + (profile.role || 'ไม่ระบุ')),
+    profile.payroll?.rate ?? ''
   ]]);
 }
 
@@ -917,4 +940,4 @@ function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError 
   });
 }
 
-module.exports = { registerGoogleSheetsRoutes, safeGoogleQueueShift, safeGoogleRefreshUserSheets, isValidPayGrade, PAY_GRADE_OPTIONS };
+module.exports = { registerGoogleSheetsRoutes, safeGoogleQueueShift, safeGoogleRefreshUserSheets };
