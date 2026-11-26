@@ -272,3 +272,11 @@ test('Vercel static responses have browser security headers', () => {
   assert.match(values['Content-Security-Policy'], /frame-ancestors 'none'/);
   assert.match(values['Permissions-Policy'], /camera=\(\)/);
 });
+
+
+test('persistent login throttling does not let an attacker lock a username from unrelated IPs', () => {
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  assert.match(source, /username = \$\{uname\} AND ip_address = \$\{ipLogin\} AND created_at > NOW\(\) - INTERVAL '15 minutes'/);
+  assert.match(source, /userIpFailures >= 8 \|\| ipFailures >= 50/);
+  assert.doesNotMatch(source, /AS "userFailures"/);
+});

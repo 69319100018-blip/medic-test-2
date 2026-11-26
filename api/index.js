@@ -501,17 +501,17 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     // Persistent failure counts are shared across serverless instances.
     const lockRows = await sql`
       SELECT
-        COUNT(*) FILTER (WHERE username = ${uname} AND created_at > NOW() - INTERVAL '15 minutes')::int AS "userFailures",
+        COUNT(*) FILTER (WHERE username = ${uname} AND ip_address = ${ipLogin} AND created_at > NOW() - INTERVAL '15 minutes')::int AS "userIpFailures",
         COUNT(*) FILTER (WHERE ip_address = ${ipLogin} AND created_at > NOW() - INTERVAL '15 minutes')::int AS "ipFailures"
       FROM security_events
       WHERE event_type = 'login_failed'
         AND created_at > NOW() - INTERVAL '15 minutes'
         AND (username = ${uname} OR ip_address = ${ipLogin})
     `;
-    const userFailures = Number(lockRows[0]?.userFailures || 0);
+    const userIpFailures = Number(lockRows[0]?.userIpFailures || 0);
     const ipFailures = Number(lockRows[0]?.ipFailures || 0);
-    if (userFailures >= 8 || ipFailures >= 50) {
-      await logSecurityEvent({ eventType: 'login_rate_limited', username: uname, fingerprint: fp, ip: ipLogin, detail: userFailures >= 8 ? 'username_threshold' : 'ip_threshold' });
+    if (userIpFailures >= 8 || ipFailures >= 50) {
+      await logSecurityEvent({ eventType: 'login_rate_limited', username: uname, fingerprint: fp, ip: ipLogin, detail: userIpFailures >= 8 ? 'username_ip_threshold' : 'ip_threshold' });
       return res.status(429).json({ error: 'พยายามเข้าสู่ระบบไม่สำเร็จหลายครั้ง กรุณารอ 15 นาที' });
     }
 
