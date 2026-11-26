@@ -231,6 +231,26 @@
                         <i class="bi bi-journal-text"></i> เว็บกฎ
                     </button>
                 </div>
+                <section class="current-duty-panel" id="currentDutyPanel" aria-labelledby="currentDutyTitle">
+                    <div class="current-duty-header">
+                        <div class="current-duty-heading">
+                            <span class="current-duty-heading-icon"><i class="bi bi-people-fill"></i></span>
+                            <div>
+                                <h3 id="currentDutyTitle">แพทย์ที่กำลังเข้าเวร</h3>
+                                <p>รายชื่อผู้ปฏิบัติหน้าที่อยู่ในขณะนี้</p>
+                            </div>
+                        </div>
+                        <div class="current-duty-header-actions">
+                            <span class="current-duty-live"><span class="current-duty-live-dot"></span> กำลังปฏิบัติงาน</span>
+                            <span class="current-duty-count" id="currentDutyCount">0 คน</span>
+                            <button type="button" class="current-duty-refresh" id="btnCurrentDutyRefresh" aria-label="รีเฟรชรายชื่อผู้เข้าเวร" title="รีเฟรชรายชื่อ"><i class="bi bi-arrow-clockwise"></i></button>
+                        </div>
+                    </div>
+                    <div class="current-duty-list" id="currentDutyList" aria-live="polite">
+                        <div class="current-duty-empty"><span class="current-duty-spinner"></span> กำลังโหลดรายชื่อผู้เข้าเวร...</div>
+                    </div>
+                    <div class="current-duty-footer"><i class="bi bi-arrow-repeat"></i> อัปเดตอัตโนมัติทุก 30 วินาที <span id="currentDutyUpdated"></span></div>
+                </section>
             </section>
 
             <section class="panel leave-panel hidden" id="leaveRequestsSection">

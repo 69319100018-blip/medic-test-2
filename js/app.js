@@ -23,6 +23,11 @@ let vehicles = [];
 let vehicleOffline = true;
 let doctors = [];
 let doctorsOffline = true;
+let currentDutyMembers = [];
+let currentDutyLoading = false;
+let currentDutyRefreshInterval = null;
+let currentDutyElapsedInterval = null;
+
 
 const SHIFT_LOCAL_KEY = 'medicShiftLog';
 const FUND_LOCAL_KEY = 'medicCentralFund';
@@ -194,6 +199,105 @@ function refreshShiftViews() {
     renderTeamStatus();
     renderForceOut();
     updateActionButtons();
+    if (typeof loadCurrentDuty === 'function') loadCurrentDuty();
+}
+
+/* ==========================================================================
+   CURRENT ON-DUTY TEAM — overview-only live status
+   ========================================================================== */
+function formatCurrentDutyElapsed(checkInAt) {
+    const timestamp = new Date(checkInAt).getTime();
+    if (!Number.isFinite(timestamp)) return 'กำลังปฏิบัติหน้าที่';
+    const total = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    if (hours > 0) return `เข้าเวรแล้ว ${hours} ชม. ${minutes} นาที`;
+    if (minutes > 0) return `เข้าเวรแล้ว ${minutes} นาที`;
+    return `เข้าเวรแล้ว ${seconds} วินาที`;
+}
+
+function renderCurrentDuty() {
+    const list = document.getElementById('currentDutyList');
+    const count = document.getElementById('currentDutyCount');
+    const updated = document.getElementById('currentDutyUpdated');
+    if (!list) return;
+
+    const members = Array.isArray(currentDutyMembers) ? currentDutyMembers : [];
+    if (count) count.textContent = `${members.length.toLocaleString('th-TH')} คน`;
+
+    if (!members.length) {
+        list.innerHTML = `
+            <div class="current-duty-empty">
+                <i class="bi bi-person-check"></i>
+                <strong>ขณะนี้ยังไม่มีผู้เข้าเวร</strong>
+                <span>รายชื่อจะแสดงที่นี่เมื่อมีสมาชิกกดเข้าเวร</span>
+            </div>`;
+    } else {
+        list.innerHTML = members.map((member) => {
+            const profile = userProfiles[member.username] || {};
+            const avatar = member.avatar || profile.avatar || '';
+            const avatarMarkup = avatar
+                ? `<img class="current-duty-avatar" src="${escapeHtml(avatar)}" alt="" loading="lazy">`
+                : `<span class="current-duty-avatar current-duty-initial">${escapeHtml(String(member.name || member.username || '?').trim().slice(0, 1))}</span>`;
+            const checkInTime = member.checkInTime || (member.checkInAt
+                ? new Date(member.checkInAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Bangkok' })
+                : '--:--');
+            return `
+                <article class="current-duty-card">
+                    <div class="current-duty-person">
+                        ${avatarMarkup}
+                        <div class="current-duty-person-info">
+                            <strong>${escapeHtml(member.name || profile.name || member.username)}</strong>
+                            <span>${escapeHtml(member.role || profile.role || 'ไม่ระบุตำแหน่ง')}</span>
+                        </div>
+                    </div>
+                    <div class="current-duty-meta">
+                        <span class="current-duty-start"><i class="bi bi-clock"></i> เข้าเวร ${escapeHtml(checkInTime)}</span>
+                        <span class="current-duty-elapsed" data-duty-start="${escapeHtml(member.checkInAt || '')}">${formatCurrentDutyElapsed(member.checkInAt)}</span>
+                    </div>
+                </article>`;
+        }).join('');
+    }
+
+    if (updated) updated.textContent = `อัปเดต ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`;
+}
+
+async function loadCurrentDuty() {
+    if (currentDutyLoading || typeof apiLoadCurrentDuty !== 'function') return;
+    const list = document.getElementById('currentDutyList');
+    if (!list) return;
+    currentDutyLoading = true;
+    try {
+        const result = await apiLoadCurrentDuty();
+        currentDutyMembers = Array.isArray(result) ? result : [];
+        renderCurrentDuty();
+    } catch (err) {
+        if (!currentDutyMembers.length) {
+            list.innerHTML = `
+                <div class="current-duty-empty is-error">
+                    <i class="bi bi-cloud-slash"></i>
+                    <strong>โหลดสถานะผู้เข้าเวรไม่สำเร็จ</strong>
+                    <span>${escapeHtml(err.message || 'กรุณาลองรีเฟรชอีกครั้ง')}</span>
+                </div>`;
+        }
+    } finally {
+        currentDutyLoading = false;
+    }
+}
+
+function initCurrentDutyPanel() {
+    if (!document.getElementById('currentDutyPanel')) return;
+    loadCurrentDuty();
+    if (currentDutyRefreshInterval) clearInterval(currentDutyRefreshInterval);
+    if (currentDutyElapsedInterval) clearInterval(currentDutyElapsedInterval);
+    currentDutyRefreshInterval = setInterval(loadCurrentDuty, 30000);
+    currentDutyElapsedInterval = setInterval(() => {
+        document.querySelectorAll('#currentDutyList [data-duty-start]').forEach((node) => {
+            node.textContent = formatCurrentDutyElapsed(node.dataset.dutyStart);
+        });
+    }, 60000);
+    document.getElementById('btnCurrentDutyRefresh')?.addEventListener('click', loadCurrentDuty);
 }
 
 /* ---------- Login video background + mouse focus ---------- */
@@ -1792,6 +1896,7 @@ async function initDashboard() {
     renderVehicles();
     renderDoctors();
     initCalendarFeature();
+    initCurrentDutyPanel();
     updateActionButtons();
     if (!canViewMonitoring(currentUser)) {
         document.getElementById('adminSection')?.classList.add('hidden');

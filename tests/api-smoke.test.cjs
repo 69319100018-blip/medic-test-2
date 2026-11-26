@@ -182,3 +182,22 @@ test('leave request routes require authentication and protect approval actions',
   assert.match(source, /status = 'pending'/);
   assert.match(source, /เหตุผลที่ไม่อนุมัติอย่างน้อย 3 ตัวอักษร/);
 });
+
+
+test('current on-duty roster is authenticated and only queries open shifts for today', async () => {
+  const response = await fetch(`${apiUrl}/api/on-duty`);
+  assert.equal(response.status, 401);
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  const routeStart = source.indexOf("app.get('/api/on-duty'");
+  const routeEnd = source.indexOf("// ---------- Shifts ----------", routeStart);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart);
+  const route = source.slice(routeStart, routeEnd);
+  assert.match(route, /authRequired/);
+  assert.match(route, /s\.duration IS NULL/);
+  assert.match(route, /s\.type = 'เข้าเวร'/);
+  assert.match(route, /s\.date_th = \$\{today\}/);
+  assert.match(route, /INNER JOIN public\.users/);
+  assert.doesNotMatch(route, /password_hash|review_note/);
+});

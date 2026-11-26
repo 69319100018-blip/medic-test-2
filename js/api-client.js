@@ -99,6 +99,10 @@ async function apiLoadUsers() {
   return api('/users');
 }
 
+async function apiLoadCurrentDuty() {
+  return api('/on-duty');
+}
+
 async function apiLoadShifts(username) {
   const q = username ? `?username=${encodeURIComponent(username)}` : '';
   return api(`/shifts${q}`);

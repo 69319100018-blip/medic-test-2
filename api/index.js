@@ -532,6 +532,33 @@ app.get('/api/users', authRequired, async (_req, res) => {
   }
 });
 
+// ---------- Current on-duty team (active shift only) ----------
+app.get('/api/on-duty', authRequired, async (req, res) => {
+  try {
+    if (!needDb(res)) return;
+    const today = thaiNow().date;
+    const rows = await sql`
+      SELECT DISTINCT ON (s.username)
+             s.username,
+             u.display_name AS name,
+             u.role,
+             u.avatar,
+             s.time_th AS "checkInTime",
+             s.datetime AS "checkInAt"
+      FROM public.shift_logs s
+      INNER JOIN public.users u ON u.username = s.username
+      WHERE s.type = 'เข้าเวร'
+        AND s.duration IS NULL
+        AND s.date_th = ${today}
+      ORDER BY s.username, s.created_at DESC
+    `;
+    rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'th'));
+    return res.json(rows);
+  } catch (err) {
+    safeError(res, err);
+  }
+});
+
 // ---------- Shifts ----------
 app.get('/api/shifts', authRequired, async (req, res) => {
   try {
