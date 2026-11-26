@@ -135,6 +135,7 @@ async function shiftValues(sql, username, shiftLogId) {
 const RANK_TAB = 'ยศ';
 const RANK_PROTECTION_DESCRIPTION = 'Medic Shift Log: database-controlled rank rates';
 const WEEKLY_RANK_PROTECTION_DESCRIPTION = 'Medic Shift Log: database-controlled weekly rank';
+const WEEKLY_DATA_PROTECTION_DESCRIPTION = 'Medic Shift Log: database-calculated shift hours and compensation';
 
 function addIsoDays(value, days) {
   const date = new Date(String(value) + 'T00:00:00.000Z');
@@ -291,6 +292,19 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
       }
     });
   }
+  if (!(weekSheetEntry?.protectedRanges || []).some((item) => item.description === WEEKLY_DATA_PROTECTION_DESCRIPTION)) {
+    protectionRequests.push({
+      addProtectedRange: {
+        protectedRange: {
+          // C:L contains daily hours, total time, calculated pay and the 21-hour threshold.
+          // Column M ("รับเงินแล้ว") intentionally remains editable.
+          range: { sheetId: weekSheet.sheetId, startRowIndex: 2, startColumnIndex: 2, endColumnIndex: 12 },
+          description: WEEKLY_DATA_PROTECTION_DESCRIPTION,
+          warningOnly: false
+        }
+      }
+    });
+  }
   if (protectionRequests.length) {
     await sheetsCall(token, spreadsheetId, 'POST', ':batchUpdate', { requests: protectionRequests });
   }
@@ -302,17 +316,12 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
     });
     const header = [
       'ลำดับ', 'รายชื่อแพทย์', ...dayHeaders,
-      'TimeTotal', 'Total Money', 'ทำงานครบ 21 ชม.', 'รับเงินแล้ว', 'ยศ', 'อัตราตามยศ (บาท)'
+      'TimeTotal', 'Total Money', 'ทำงานครบ 21 ชม.', 'รับเงินแล้ว', 'ยศจากฐานข้อมูล', 'อัตราตามยศ (บาท)'
     ];
     const title = ['สรุปเวลาเข้าเวรและค่าตอบแทนประจำสัปดาห์'].concat(Array(14).fill(''));
     const initialRow = [
       1, '', '', '', '', '', '', '', '',
-      '=SUM(C3:I3)',
-      '=IF(O3="","",J3*24*O3)',
-      '=J3*24>=21',
-      false,
-      '',
-      ''
+      '', '', false, false, '', ''
     ];
     await updateSheetValues(
       token,
@@ -471,19 +480,27 @@ async function syncWeeklyWeek(sql, token, connection, profile, weekStart) {
     const seconds = byDate.get(date) || 0;
     return seconds > 0 ? seconds / 86400 : '';
   });
+  const totalSeconds = totals.reduce((sum, row) => sum + (Number(row.seconds) || 0), 0);
+  const totalHours = totalSeconds / 3600;
+  const totalTimeDays = totalSeconds / 86400;
+  const totalMoney = profile.payroll?.matched
+    ? Math.round(totalHours * profile.payroll.rate * 100) / 100
+    : '';
   const tabs = await ensurePayrollTabs(token, connection.spreadsheet_id, weekStart);
   const title = tabs.weekTitle;
-  await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'C3:I3'), [dailyValues]);
-  await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'B3:B3'), [[profile.name || connection.username]]);
+  await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'C3:I3'), [dailyValues], 'RAW');
+  await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'B3:B3'), [[profile.name || connection.username]], 'RAW');
+  // Weekly totals and compensation are calculated on the server from Neon.
+  // Column M ("รับเงินแล้ว") remains editable; calculated columns are protected.
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'J3:L3'), [[
-    '=SUM(C3:I3)',
-    '=IF(O3="","",J3*24*O3)',
-    '=J3*24>=21'
-  ]]);
+    totalTimeDays,
+    totalMoney,
+    totalHours >= 21
+  ]], 'RAW');
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'N3:O3'), [[
     profile.payroll?.grade || ('ไม่พบยศตาม Role: ' + (profile.role || 'ไม่ระบุ')),
     profile.payroll?.rate ?? ''
-  ]]);
+  ]], 'RAW');
 }
 
 async function syncCurrentWeekForConnection(sql, connection) {
