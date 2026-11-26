@@ -181,7 +181,7 @@ async function updateSheetValues(token, spreadsheetId, range, values, inputOptio
   );
 }
 
-async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
+async function ensurePayrollTabs(token, spreadsheetId, weekStart, ownerEmail) {
   const weekTitle = weeklyTabName(weekStart);
   let metadata = await spreadsheetMetadata(token, spreadsheetId);
   let sheets = Array.isArray(metadata.sheets) ? metadata.sheets : [];
@@ -276,7 +276,8 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
         protectedRange: {
           range: { sheetId: rankSheet.sheetId },
           description: RANK_PROTECTION_DESCRIPTION,
-          warningOnly: false
+          warningOnly: false,
+          editors: { users: ownerEmail ? [ownerEmail] : [], groups: [], domainUsersCanEdit: false }
         }
       }
     });
@@ -287,7 +288,8 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
         protectedRange: {
           range: { sheetId: weekSheet.sheetId, startRowIndex: 2, startColumnIndex: 13, endColumnIndex: 15 },
           description: WEEKLY_RANK_PROTECTION_DESCRIPTION,
-          warningOnly: false
+          warningOnly: false,
+          editors: { users: ownerEmail ? [ownerEmail] : [], groups: [], domainUsersCanEdit: false }
         }
       }
     });
@@ -300,7 +302,8 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
           // Column M ("รับเงินแล้ว") intentionally remains editable.
           range: { sheetId: weekSheet.sheetId, startRowIndex: 2, startColumnIndex: 1, endColumnIndex: 12 },
           description: WEEKLY_DATA_PROTECTION_DESCRIPTION,
-          warningOnly: false
+          warningOnly: false,
+          editors: { users: ownerEmail ? [ownerEmail] : [], groups: [], domainUsersCanEdit: false }
         }
       }
     });
@@ -486,7 +489,7 @@ async function syncWeeklyWeek(sql, token, connection, profile, weekStart) {
   const totalMoney = profile.payroll?.matched
     ? Math.round(totalHours * profile.payroll.rate * 100) / 100
     : '';
-  const tabs = await ensurePayrollTabs(token, connection.spreadsheet_id, weekStart);
+  const tabs = await ensurePayrollTabs(token, connection.spreadsheet_id, weekStart, connection.google_email);
   const title = tabs.weekTitle;
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'C3:I3'), [dailyValues], 'RAW');
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'B3:B3'), [[profile.name || connection.username]], 'RAW');
@@ -540,10 +543,11 @@ async function safeGoogleEnsureCurrentWeek(sql, username) {
       LIMIT 1
     `;
     if (!rows.length) return { status: 'not_connected' };
-    await scheduleBackground(() => syncCurrentWeekForConnection(sql, rows[0]));
+    // Reconcile every existing week tab so old spreadsheets also receive the database-backed rank.
+    await scheduleBackground(() => syncAllWeeklyTabsForConnection(sql, rows[0]));
     return { status: 'scheduled' };
   } catch (err) {
-    console.error('Google Sheets current-week setup could not be scheduled:', err.code || err.name || 'unknown');
+    console.error('Google Sheets weekly payroll reconciliation could not be scheduled:', err.code || err.name || 'unknown');
     return { status: 'pending' };
   }
 }
