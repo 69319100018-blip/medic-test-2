@@ -4922,3 +4922,58 @@ body.dashboard-body.theme-dark::after {
   .page-dashboard .current-duty-header { align-items: flex-start; }
   .page-dashboard .current-duty-card { padding: 10px; }
 }
+
+
+/* Personal Google Sheets — private spreadsheet connection */
+.page-dashboard .google-sheets-panel {
+  grid-area: duty;
+  min-width: 0;
+  padding: 17px 18px 14px;
+  border: 1px solid #d5e4ef;
+  border-radius: 13px;
+  background: #f8fbfe;
+}
+.page-dashboard .google-sheets-header,
+.page-dashboard .google-sheets-heading { display: flex; align-items: center; }
+.page-dashboard .google-sheets-header { justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.page-dashboard .google-sheets-heading { gap: 11px; }
+.page-dashboard .google-sheets-icon {
+  display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 38px;
+  border: 1px solid #c6ddeb; border-radius: 10px; background: #eaf5fc; color: #286b9f; font-size: 1.1rem;
+}
+.page-dashboard .google-sheets-heading h3 { margin: 0; color: #1b3550; font-size: .94rem; font-weight: 800; }
+.page-dashboard .google-sheets-heading p { margin: 3px 0 0; color: #5b7186; font-size: .72rem; }
+.page-dashboard .google-sheets-badge {
+  display: inline-flex; align-items: center; min-height: 28px; padding: 5px 10px;
+  border: 1px solid #d5e3ef; border-radius: 999px; background: #edf5fb; color: #345873; font-size: .69rem; font-weight: 800;
+}
+.page-dashboard .google-sheets-badge.connected { border-color: #cfe6d9; background: #eff9f3; color: #246748; }
+.page-dashboard .google-sheets-badge.warning { border-color: #ead9b7; background: #fff7e7; color: #825719; }
+.page-dashboard .google-sheets-status {
+  margin-top: 13px; padding: 10px 12px; border: 1px solid #dbe7f0; border-radius: 9px;
+  background: #fff; color: #38566f; font-size: .75rem; line-height: 1.55;
+}
+.page-dashboard .google-sheets-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.page-dashboard .google-sheets-open {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 8px 12px;
+  border: 1px solid #c6ddeb; border-radius: 8px; background: #eaf5fc; color: #205e88; font-size: .74rem; font-weight: 800; text-decoration: none;
+}
+.page-dashboard .google-sheets-open:hover { border-color: #8bb7d5; background: #dff0fa; color: #174d73; }
+.page-dashboard .google-sheets-footnote { margin: 10px 0 0; color: #71869a; font-size: .66rem; line-height: 1.5; }
+.theme-dark .page-dashboard .google-sheets-panel { border-color: #304b64; background: #14283d; }
+.theme-dark .page-dashboard .google-sheets-heading h3 { color: #f1f6fb; }
+.theme-dark .page-dashboard .google-sheets-heading p,
+.theme-dark .page-dashboard .google-sheets-footnote { color: #c2d0de; }
+.theme-dark .page-dashboard .google-sheets-icon { border-color: #3b6685; background: #203d56; color: #a9d9f1; }
+.theme-dark .page-dashboard .google-sheets-badge { border-color: #3b5873; background: #20364d; color: #e1edf6; }
+.theme-dark .page-dashboard .google-sheets-badge.connected { border-color: #286b4e; background: #173d32; color: #a7e2c2; }
+.theme-dark .page-dashboard .google-sheets-badge.warning { border-color: #80632f; background: #44351d; color: #f7d998; }
+.theme-dark .page-dashboard .google-sheets-status { border-color: #36536e; background: #1b3047; color: #e1edf6; }
+.theme-dark .page-dashboard .google-sheets-open { border-color: #3b6685; background: #203d56; color: #c6e7f8; }
+.theme-dark .page-dashboard .google-sheets-open:hover { border-color: #6092b6; background: #294c69; color: #fff; }
+@media (max-width: 600px) {
+  .page-dashboard .google-sheets-panel { padding: 13px; }
+  .page-dashboard .google-sheets-header { align-items: flex-start; }
+  .page-dashboard .google-sheets-actions { align-items: stretch; }
+  .page-dashboard .google-sheets-actions > * { flex: 1 1 auto; }
+}
