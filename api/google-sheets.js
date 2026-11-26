@@ -292,7 +292,7 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart) {
       '=IF(J3*24>=21,"ครบ","ไม่ครบ")',
       false,
       '',
-      '=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$11,2,FALSE),"")'
+      "=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$11,2,FALSE),\"\")"
     ];
     await updateSheetValues(
       token,
@@ -455,7 +455,7 @@ async function syncWeeklyWeek(sql, token, connection, profile, weekStart) {
   ]]);
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'N3:O3'), [[
     profile.payGrade || '',
-    '=IFERROR(VLOOKUP(N3,\\'ยศ\\'!$A$2:$B$11,2,FALSE),"")'
+    "=IFERROR(VLOOKUP(N3,'ยศ'!$A$2:$B$11,2,FALSE),\"\")"
   ]]);
 }
 
