@@ -272,9 +272,10 @@ function renderCurrentDuty() {
 }
 
 async function loadCurrentDuty() {
-    if (currentDutyLoading || typeof apiLoadCurrentDuty !== 'function') return;
+    if (currentDutyLoading || typeof apiLoadCurrentDuty !== 'function' || document.visibilityState === 'hidden') return;
     const list = document.getElementById('currentDutyList');
-    if (!list) return;
+    const panel = document.getElementById('currentDutyPanel');
+    if (!list || !panel || panel.closest('.panel.hidden')) return;
     currentDutyLoading = true;
     try {
         const result = await apiLoadCurrentDuty();
@@ -324,8 +325,8 @@ function dashboardRefreshShouldPause() {
 
 async function refreshDashboardUserDirectory() {
     if (Date.now() - dashboardUsersLastRefreshAt < DASHBOARD_USERS_REFRESH_MS) return false;
-    dashboardUsersLastRefreshAt = Date.now();
     const latestUsers = await apiLoadUsers();
+    dashboardUsersLastRefreshAt = Date.now();
     if (!dashboardDataChanged(users, latestUsers || {})) return false;
 
     users = latestUsers || {};
