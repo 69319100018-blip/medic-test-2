@@ -328,11 +328,18 @@ test('personal Google Sheets endpoints require an authenticated user and a prote
   for (const response of responses) assert.equal(response.status, 401);
 });
 
+test('admin Google Sheets directory is not public', async () => {
+  const response = await fetch(`${apiUrl}/api/google-sheets/admin-sheets`);
+  assert.equal(response.status, 401);
+});
+
 test('personal Google Sheets integration uses least-privilege OAuth and encrypted per-user tokens', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const source = fs.readFileSync(path.join(__dirname, '..', 'api', 'google-sheets.js'), 'utf8');
   const api = fs.readFileSync(path.join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  const client = fs.readFileSync(path.join(__dirname, '..', 'js', 'api-client.js'), 'utf8');
+  const appClient = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
   assert.match(source, /https:\/\/www\.googleapis\.com\/auth\/drive\.file/);
   assert.match(source, /createCipheriv\('aes-256-gcm'/);
   assert.match(source, /code_challenge_method: 'S256'/);
@@ -366,8 +373,13 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
   assert.match(source, /WEEKLY_DATA_PROTECTION_DESCRIPTION/);
   assert.match(source, /WEEKLY_RANK_PROTECTION_DESCRIPTION/);
   assert.match(source, /WEEKLY_DATA_PROTECTION_DESCRIPTION/);
-  assert.match(source, /editors: \{ users: ownerEmail \? \[ownerEmail\] : \[\]/);
+  assert.match(source, /editors: \{ users: protectedEditors/);
   assert.match(source, /connection\.google_email/);
+  assert.match(source, /ensureDriveEditor/);
+  assert.match(source, /app\.get\('\/api\/google-sheets\/admin-sheets'/);
+  assert.match(source, /req\.user\?\.isAdmin/);
+  assert.match(client, /apiLoadAdminSheets/);
+  assert.match(appClient, /payroll-sheet-link/);
   assert.match(source, /syncAllWeeklyTabsForConnection\(sql, rows\[0\]\)/);
   assert.match(source, /RANK_PROTECTION_DESCRIPTION/);
   assert.match(source, /getPayrollInfoForRole\(profile\.role\)/);
@@ -384,8 +396,9 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
   });
   assert.equal(payroll.getPayrollInfoForRole('ผู้อำนวยการแพทย์').rate, 45000);
   assert.equal(payroll.getPayrollInfoForRole('Test 7 Day').grade, 'Test 7 Day');
-  assert.equal(payroll.getPayrollInfoForRole('แอดมินแพทย์').matched, false);
-  assert.equal(payroll.getPayrollInfoForRole('แอดมินแพทย์').rate, null);
+  assert.deepEqual(payroll.getPayrollInfoForRole('แอดมินแพทย์'), {
+    sourceRole: 'แอดมินแพทย์', grade: 'ผู้อำนวยการ', rate: 45000, matched: true
+  });
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   assert.ok(pkg.dependencies['@vercel/functions']);
 });
