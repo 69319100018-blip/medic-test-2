@@ -30,9 +30,11 @@
 3. ทุก server request ต้องมี timestamp และ nonce; API ตรวจเวลาคลาดเคลื่อนและปฏิเสธ nonce ที่ใช้ซ้ำ
 4. ไม่รับ username หรือ role จาก Client เป็นแหล่งยืนยันตัวตน ใช้ identifier ที่ Resource อ่านจากฝั่ง Server และ mapping ที่แอดมินอนุมัติ
 5. คำสั่งจากเว็บไซต์ใช้ JWT และตรวจ `req.user.isAdmin` ฝั่ง API อีกครั้ง
-6. คำสั่งมี UUID, idempotency key, expiry, claim แบบ `FOR UPDATE SKIP LOCKED` และผลตอบกลับที่ผูกกับ server เดิม
-7. คำสั่ง `force_off_duty` จะถือว่าสำเร็จต่อเมื่อ Adapter ยืนยันทั้ง `dutyCleared=true` และ `vehicleSecured=true`
-8. Adapter ตัวอย่างยังไม่ implement framework-specific logic และคืนค่าไม่สำเร็จเสมอ จึงไม่มีคำสั่งใดเปลี่ยนยศ/สถานะหรือแตะรถจริงในสภาพปัจจุบัน
+6. Heartbeat ส่ง Identifier ของผู้เล่นออนไลน์จากฝั่ง Server เพื่อ reconcile สถานะออนไลน์และเคลียร์สถานะค้างเมื่อผู้เล่นหลุด
+7. คำสั่งมี UUID, idempotency key, expiry, claim แบบ `FOR UPDATE SKIP LOCKED`, lease สำหรับรับงานซ้ำ และผลตอบกลับที่ผูกกับ server เดิม
+8. API จะไม่ออกคำสั่งแอดมินถ้า Server heartbeat เก่า หรือ Adapter ยังไม่พร้อม
+9. คำสั่ง `force_off_duty` จะถือว่าสำเร็จต่อเมื่อ Adapter ยืนยันทั้ง `dutyCleared=true` และ `vehicleSecured=true`
+10. Adapter ตัวอย่างยังไม่ implement framework-specific logic และคืนค่าไม่สำเร็จเสมอ จึงไม่มีคำสั่งใดเปลี่ยนยศ/สถานะหรือแตะรถจริงในสภาพปัจจุบัน
 
 ## Framework adapter ยังต้องเติม
 
@@ -67,7 +69,7 @@ API routes (ยังไม่ mount):
 - `POST /api/fivem/admin/player-links`
 - `POST /api/fivem/admin/commands`
 
-Supported server events: `player_connected`, `player_disconnected`, `duty_started`, `duty_ended`, `vehicle_entered`, `vehicle_exited`.
+Supported server events: `player_connected`, `player_disconnected`, `duty_started`, `duty_ended`, `vehicle_entered`, `vehicle_exited`. Heartbeat reconciliation also updates online/offline presence independently of the optional framework adapter.
 
 Supported admin command in this foundation: `force_off_duty`. It is designed to clear EMS duty state and secure the current duty vehicle through the future framework adapter. It does **not** demote or delete the player's permanent job/grade.
 
