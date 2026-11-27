@@ -51,6 +51,8 @@ test('FiveM routes remain isolated from the current production API entry', () =>
   assert.match(bridgeSource, /adapterReady !== true/);
   assert.match(bridgeSource, /dutyCleared === true/);
   assert.match(bridgeSource, /vehicleSecured === true/);
+  assert.match(bridgeSource, /DISCORD_WEBHOOK_FIVEM/);
+  assert.match(bridgeSource, /allowed_mentions: \{ parse: \[\] \}/);
 });
 
 test('FiveM resource is disabled by default and keeps credentials server-only', () => {
