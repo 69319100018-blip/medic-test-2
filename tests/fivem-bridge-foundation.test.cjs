@@ -41,6 +41,8 @@ test('FiveM routes remain isolated from the current production API entry', () =>
   const apiEntry = fs.readFileSync(path.join(root, 'api', 'index.js'), 'utf8');
   const bridgeSource = fs.readFileSync(path.join(root, 'api', 'fivem-bridge.js'), 'utf8');
   assert.doesNotMatch(apiEntry, /fivem-bridge|registerFiveMBridgeRoutes/);
+  const dashboard = fs.readFileSync(path.join(root, 'dashboard.html'), 'utf8');
+  assert.doesNotMatch(dashboard, /fivem-control\.js|fivem-control\.css|fivemControlSection/);
   assert.match(bridgeSource, /req\.user\?\.isAdmin === true/);
   assert.match(bridgeSource, /crypto\.timingSafeEqual/);
   assert.match(bridgeSource, /FOR UPDATE SKIP LOCKED/);
