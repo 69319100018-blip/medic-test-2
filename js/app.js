@@ -29,6 +29,12 @@ let currentDutyMembers = [];
 let currentDutyLoading = false;
 let currentDutyRefreshInterval = null;
 let currentDutyElapsedInterval = null;
+let dashboardAutoRefreshInterval = null;
+let dashboardAutoRefreshBusy = false;
+let dashboardUsersLastRefreshAt = 0;
+let dashboardMembersLastRefreshAt = 0;
+const DASHBOARD_AUTO_REFRESH_MS = 10000;
+const DASHBOARD_USERS_REFRESH_MS = 60000;
 
 
 const SHIFT_LOCAL_KEY = 'medicShiftLog';
@@ -293,7 +299,7 @@ function initCurrentDutyPanel() {
     loadCurrentDuty();
     if (currentDutyRefreshInterval) clearInterval(currentDutyRefreshInterval);
     if (currentDutyElapsedInterval) clearInterval(currentDutyElapsedInterval);
-    currentDutyRefreshInterval = setInterval(loadCurrentDuty, 30000);
+    currentDutyRefreshInterval = setInterval(loadCurrentDuty, DASHBOARD_AUTO_REFRESH_MS);
     currentDutyElapsedInterval = setInterval(() => {
         document.querySelectorAll('#currentDutyList [data-duty-start]').forEach((node) => {
             node.textContent = formatCurrentDutyElapsed(node.dataset.dutyStart);
@@ -301,6 +307,146 @@ function initCurrentDutyPanel() {
     }, 60000);
     document.getElementById('btnCurrentDutyRefresh')?.addEventListener('click', loadCurrentDuty);
 }
+
+/* Dashboard data refresh — poll the visible panel without reloading the page. */
+function dashboardDataChanged(previous, next) {
+    try { return JSON.stringify(previous) !== JSON.stringify(next); }
+    catch (_err) { return true; }
+}
+
+function dashboardRefreshShouldPause() {
+    if (document.visibilityState === 'hidden') return true;
+    if (document.querySelector('.swal2-container.swal2-shown')) return true;
+    const active = document.activeElement;
+    return !!(active && active.matches &&
+        active.matches('input, textarea, select, [contenteditable="true"], [role="textbox"]'));
+}
+
+async function refreshDashboardUserDirectory() {
+    if (Date.now() - dashboardUsersLastRefreshAt < DASHBOARD_USERS_REFRESH_MS) return false;
+    dashboardUsersLastRefreshAt = Date.now();
+    const latestUsers = await apiLoadUsers();
+    if (!dashboardDataChanged(users, latestUsers || {})) return false;
+
+    users = latestUsers || {};
+    Object.keys(userProfiles).forEach((username) => delete userProfiles[username]);
+    Object.assign(userProfiles, users);
+    renderProfile();
+
+    const monitoringAllowed = canViewMonitoring(currentUser);
+    const adminAllowed = isAdmin(currentUser);
+    document.getElementById('adminSection')?.classList.toggle('hidden', !monitoringAllowed);
+    document.getElementById('stockHistorySection')?.classList.toggle('hidden', !monitoringAllowed);
+    document.getElementById('securitySection')?.classList.toggle('hidden', !adminAllowed);
+    document.getElementById('membersSection')?.classList.toggle('hidden', !adminAllowed);
+    document.querySelectorAll('.nav-link').forEach((link) => {
+        if (['adminSection', 'stockHistorySection'].includes(link.dataset.target)) {
+            link.classList.toggle('hidden', !monitoringAllowed);
+        }
+        if (['securitySection', 'membersSection', 'intelSection'].includes(link.dataset.target)) {
+            link.classList.toggle('hidden', !adminAllowed);
+        }
+    });
+    return true;
+}
+
+async function refreshActiveDashboardData() {
+    if (dashboardAutoRefreshBusy || dashboardRefreshShouldPause() ||
+        !currentUser || typeof getToken !== 'function' || !getToken()) return;
+
+    const activePanel = document.querySelector('#workspaceMain > .panel:not(.hidden)');
+    if (!activePanel) return;
+
+    dashboardAutoRefreshBusy = true;
+    try {
+        const panelId = activePanel.id;
+        const usesUserDirectory = [
+            'overviewSection', 'adminSection', 'doctorsSection', 'membersSection'
+        ].includes(panelId);
+        let userDirectoryChanged = false;
+        if (usesUserDirectory) {
+            try {
+                if (panelId === 'membersSection') {
+                    if (Date.now() - dashboardMembersLastRefreshAt >= DASHBOARD_USERS_REFRESH_MS) {
+                        dashboardMembersLastRefreshAt = Date.now();
+                        await loadPayrollGrades();
+                    }
+                } else {
+                    userDirectoryChanged = await refreshDashboardUserDirectory();
+                }
+            } catch (err) {
+                console.warn('[Dashboard refresh] user directory:', err?.message || 'failed');
+            }
+        }
+
+        if (panelId === 'overviewSection' || panelId === 'adminSection' || panelId === 'historySection') {
+            const latestShifts = await apiLoadShifts();
+            const changed = dashboardDataChanged(shiftLog, latestShifts || {});
+            if (changed) shiftLog = latestShifts || {};
+
+            if (panelId === 'overviewSection') {
+                if (changed || userDirectoryChanged) renderProfile();
+                updateActionButtons();
+            } else if (panelId === 'adminSection') {
+                if (changed || userDirectoryChanged) renderForceOut();
+                renderTeamStatus();
+            } else if (changed) {
+                renderLog();
+            }
+        } else if (panelId === 'fundsSection') {
+            const latest = await apiLoadFund();
+            if (dashboardDataChanged(centralFund, latest)) {
+                centralFund = latest;
+                renderCentralFund();
+            }
+        } else if (panelId === 'stockSection') {
+            const latest = await apiLoadStock();
+            if (dashboardDataChanged(stockItems, latest)) {
+                stockItems = Array.isArray(latest) ? latest : [];
+                renderStock();
+            }
+        } else if (panelId === 'stockHistorySection' && canViewMonitoring(currentUser)) {
+            const latest = await apiLoadStockWithdrawals();
+            if (dashboardDataChanged(stockWithdrawals, latest)) {
+                stockWithdrawals = Array.isArray(latest) ? latest : [];
+                renderStockWithdrawals();
+            }
+        } else if (panelId === 'vehicleSection') {
+            const latest = await apiLoadVehicles();
+            if (dashboardDataChanged(vehicles, latest)) {
+                vehicles = Array.isArray(latest) ? latest : [];
+                renderVehicles();
+            }
+        } else if (panelId === 'doctorsSection') {
+            const latest = await apiLoadDoctors();
+            if (dashboardDataChanged(doctors, latest)) {
+                doctors = Array.isArray(latest) ? latest : [];
+                renderDoctors();
+            } else if (userDirectoryChanged) {
+                renderDoctors();
+            }
+        } else if (panelId === 'leaveRequestsSection' && !leaveUiState.loading) {
+            const latest = await apiLoadLeaveRequests();
+            if (dashboardDataChanged(leaveUiState.requests, latest)) {
+                leaveUiState.requests = Array.isArray(latest) ? latest : [];
+                if (!leaveUiState.canApprove) leaveUiState.filter = 'all';
+                renderLeaveSummary();
+                renderLeaveRequests();
+            }
+        }
+    } catch (err) {
+        // A transient refresh failure must not replace good cached data or interrupt the session.
+        console.warn('[Dashboard refresh] skipped:', err?.message || 'temporary error');
+    } finally {
+        dashboardAutoRefreshBusy = false;
+    }
+}
+
+function startDashboardAutoRefresh() {
+    if (dashboardAutoRefreshInterval) clearInterval(dashboardAutoRefreshInterval);
+    dashboardAutoRefreshInterval = setInterval(refreshActiveDashboardData, DASHBOARD_AUTO_REFRESH_MS);
+}
+
 
 /* Personal Google Sheets */
 let googleSheetsUiReady = false;
@@ -2144,6 +2290,9 @@ async function initDashboard() {
         try { setupIntelUnlock(); } catch (_e) { /* ignore */ }
     }
 
+    // Start lightweight 10-second polling only after the initial snapshot is ready.
+    startDashboardAutoRefresh();
+
     // Reveal the hydrated workspace only after all initial renderers complete.
     setDashboardLoading(false);
     const firstPanel = document.getElementById('overviewSection');
@@ -2835,6 +2984,9 @@ function initPage() {
 
 window.addEventListener('DOMContentLoaded', initPage);
 window.addEventListener('beforeunload', () => {
+    if (dashboardAutoRefreshInterval) clearInterval(dashboardAutoRefreshInterval);
+    if (currentDutyRefreshInterval) clearInterval(currentDutyRefreshInterval);
+    if (currentDutyElapsedInterval) clearInterval(currentDutyElapsedInterval);
     if (elapsedInterval) clearInterval(elapsedInterval);
     if (realtimeInterval) clearInterval(realtimeInterval);
     if (loginBgInterval) clearInterval(loginBgInterval);
