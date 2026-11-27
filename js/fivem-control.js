@@ -2,6 +2,10 @@
 (function () {
     'use strict';
 
+    let refreshInProgress = false;
+    let autoRefreshTimer = null;
+    const AUTO_REFRESH_MS = 10000;
+
     const API = (path, options = {}) => {
         if (typeof window.api !== 'function') {
             throw new Error('API client is not available');
@@ -100,6 +104,8 @@
     }
 
     async function refresh(root) {
+        if (refreshInProgress || !root?.isConnected) return;
+        refreshInProgress = true;
         const button = root.querySelector('#btnRefreshFiveM');
         if (button) button.disabled = true;
         setNotice(root, 'กำลังโหลดสถานะ FiveM...');
@@ -114,7 +120,16 @@
             setNotice(root, error.message || 'ไม่สามารถโหลดสถานะ FiveM ได้', true);
         } finally {
             if (button) button.disabled = false;
+            refreshInProgress = false;
         }
+    }
+
+    function startAutoRefresh(root) {
+        if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+        autoRefreshTimer = setInterval(() => {
+            if (document.visibilityState === 'hidden' || !root?.isConnected || root.closest('.hidden')) return;
+            refresh(root);
+        }, AUTO_REFRESH_MS);
     }
 
     async function requestForceOffDuty(root, username) {
@@ -187,7 +202,19 @@
             requestForceOffDuty(root, button.dataset.fivemForceOffDuty);
         });
         refresh(root);
+        startAutoRefresh(root);
     }
+
+    window.addEventListener('beforeunload', () => {
+        if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        const root = document.getElementById('fivemControlSection');
+        if (document.visibilityState === 'visible' && root?.isConnected && !root.closest('.hidden')) {
+            refresh(root);
+        }
+    });
 
     window.MedicFiveMControl = { init, refresh };
 })();
