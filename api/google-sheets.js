@@ -87,6 +87,28 @@ async function sheetsCall(token, spreadsheetId, method, path, body) {
   }
   return data;
 }
+
+async function ensureDriveEditor(token, fileId, email) {
+  const base = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '/permissions';
+  const headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+  const existing = await googleJson(base + '?fields=permissions(id,emailAddress,role,type)', { headers });
+  const permission = (existing.permissions || []).find((item) =>
+    String(item.emailAddress || '').toLowerCase() === String(email || '').toLowerCase()
+  );
+  if (permission?.role === 'owner' || permission?.role === 'writer') return true;
+  if (permission?.id) {
+    await googleJson(base + '/' + encodeURIComponent(permission.id) + '?fields=id,role', {
+      method: 'PATCH', headers, body: JSON.stringify({ role: 'writer' })
+    });
+    return true;
+  }
+  await googleJson(base + '?sendNotificationEmail=false&fields=id,emailAddress,role', {
+    method: 'POST', headers,
+    body: JSON.stringify({ type: 'user', role: 'writer', emailAddress: email })
+  });
+  return true;
+}
+
 async function createSheet(token, displayName) {
   const name = String(displayName || 'ผู้ใช้งาน').replace(/[\r\n]/g, ' ').trim().slice(0, 80) || 'ผู้ใช้งาน';
   const created = await googleJson('https://sheets.googleapis.com/v4/spreadsheets', {
@@ -181,7 +203,176 @@ async function updateSheetValues(token, spreadsheetId, range, values, inputOptio
   );
 }
 
-async function ensurePayrollTabs(token, spreadsheetId, weekStart, ownerEmail) {
+
+async function applyPayrollSheetDesign(token, spreadsheetId, shiftSheetId, rankSheetId, weekSheetId) {
+  const requests = [];
+  const navy = { red: 0.10, green: 0.25, blue: 0.38 };
+  const navyText = { red: 0.12, green: 0.22, blue: 0.32 };
+  const paleBlue = { red: 0.88, green: 0.94, blue: 0.98 };
+  const veryLight = { red: 0.96, green: 0.98, blue: 0.99 };
+  const white = { red: 1, green: 1, blue: 1 };
+  const borderColor = { red: 0.78, green: 0.85, blue: 0.90 };
+  const updateGrid = (sheetId, frozenRowCount) => {
+    if (sheetId == null) return;
+    requests.push({
+      updateSheetProperties: {
+        properties: { sheetId, gridProperties: { hideGridlines: true, frozenRowCount } },
+        fields: 'gridProperties.hideGridlines,gridProperties.frozenRowCount'
+      }
+    });
+  };
+  const width = (sheetId, start, end, pixels) => requests.push({
+    updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: start, endIndex: end },
+      properties: { pixelSize: pixels },
+      fields: 'pixelSize'
+    }
+  });
+  const header = (sheetId, rowStart, rowEnd, columns) => requests.push({
+    repeatCell: {
+      range: { sheetId, startRowIndex: rowStart, endRowIndex: rowEnd, startColumnIndex: 0, endColumnIndex: columns },
+      cell: { userEnteredFormat: {
+        backgroundColor: navy,
+        textFormat: { foregroundColor: white, bold: true, fontSize: 10 },
+        horizontalAlignment: 'CENTER',
+        verticalAlignment: 'MIDDLE',
+        wrapStrategy: 'WRAP',
+        borders: {
+          bottom: { style: 'SOLID_MEDIUM', color: borderColor }
+        }
+      } },
+      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy,borders)'
+    }
+  });
+  const body = (sheetId, rowStart, rowEnd, columns) => requests.push({
+    repeatCell: {
+      range: { sheetId, startRowIndex: rowStart, endRowIndex: rowEnd, startColumnIndex: 0, endColumnIndex: columns },
+      cell: { userEnteredFormat: {
+        backgroundColor: veryLight,
+        textFormat: { foregroundColor: navyText, fontSize: 10 },
+        verticalAlignment: 'MIDDLE',
+        wrapStrategy: 'WRAP',
+        borders: {
+          bottom: { style: 'SOLID', color: borderColor },
+          right: { style: 'SOLID', color: { red: 0.90, green: 0.93, blue: 0.95 } }
+        }
+      } },
+      fields: 'userEnteredFormat(backgroundColor,textFormat,verticalAlignment,wrapStrategy,borders)'
+    }
+  });
+
+  if (shiftSheetId != null) {
+    updateGrid(shiftSheetId, 1);
+    header(shiftSheetId, 0, 1, 8);
+    body(shiftSheetId, 1, 100, 8);
+    width(shiftSheetId, 0, 1, 110);
+    width(shiftSheetId, 1, 2, 125);
+    width(shiftSheetId, 2, 3, 190);
+    width(shiftSheetId, 3, 4, 155);
+    width(shiftSheetId, 4, 6, 120);
+    width(shiftSheetId, 6, 7, 130);
+    width(shiftSheetId, 7, 8, 125);
+    requests.push({
+      repeatCell: {
+        range: { sheetId: shiftSheetId, startRowIndex: 1, endRowIndex: 100, startColumnIndex: 0, endColumnIndex: 8 },
+        cell: { userEnteredFormat: { verticalAlignment: 'MIDDLE' } },
+        fields: 'userEnteredFormat.verticalAlignment'
+      }
+    });
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId: shiftSheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+        properties: { pixelSize: 38 }, fields: 'pixelSize'
+      }
+    });
+  }
+
+  if (rankSheetId != null) {
+    updateGrid(rankSheetId, 1);
+    header(rankSheetId, 0, 1, 3);
+    body(rankSheetId, 1, 30, 3);
+    width(rankSheetId, 0, 1, 210);
+    width(rankSheetId, 1, 2, 150);
+    width(rankSheetId, 2, 3, 390);
+    requests.push({
+      repeatCell: {
+        range: { sheetId: rankSheetId, startRowIndex: 1, endRowIndex: 30, startColumnIndex: 1, endColumnIndex: 2 },
+        cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '#,##0" บาท"' }, horizontalAlignment: 'RIGHT' } },
+        fields: 'userEnteredFormat(numberFormat,horizontalAlignment)'
+      }
+    });
+  }
+
+  if (weekSheetId != null) {
+    updateGrid(weekSheetId, 2);
+    requests.push({
+      repeatCell: {
+        range: { sheetId: weekSheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 15 },
+        cell: { userEnteredFormat: {
+          backgroundColor: navy,
+          textFormat: { foregroundColor: white, bold: true, fontSize: 15 },
+          horizontalAlignment: 'CENTER',
+          verticalAlignment: 'MIDDLE'
+        } },
+        fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+      }
+    });
+    header(weekSheetId, 1, 2, 15);
+    body(weekSheetId, 2, 20, 15);
+    requests.push({
+      repeatCell: {
+        range: { sheetId: weekSheetId, startRowIndex: 2, endRowIndex: 20, startColumnIndex: 2, endColumnIndex: 10 },
+        cell: { userEnteredFormat: { numberFormat: { type: 'TIME', pattern: '[h]:mm' }, horizontalAlignment: 'CENTER' } },
+        fields: 'userEnteredFormat(numberFormat,horizontalAlignment)'
+      }
+    });
+    requests.push({
+      repeatCell: {
+        range: { sheetId: weekSheetId, startRowIndex: 2, endRowIndex: 20, startColumnIndex: 9, endColumnIndex: 10 },
+        cell: { userEnteredFormat: { backgroundColor: paleBlue, textFormat: { foregroundColor: navyText, bold: true }, numberFormat: { type: 'TIME', pattern: '[h]:mm' } } },
+        fields: 'userEnteredFormat(backgroundColor,textFormat,numberFormat)'
+      }
+    });
+    requests.push({
+      repeatCell: {
+        range: { sheetId: weekSheetId, startRowIndex: 2, endRowIndex: 20, startColumnIndex: 10, endColumnIndex: 11 },
+        cell: { userEnteredFormat: { backgroundColor: paleBlue, textFormat: { foregroundColor: navyText, bold: true }, numberFormat: { type: 'NUMBER', pattern: '#,##0.00" บาท"' }, horizontalAlignment: 'RIGHT' } },
+        fields: 'userEnteredFormat(backgroundColor,textFormat,numberFormat,horizontalAlignment)'
+      }
+    });
+    requests.push({
+      repeatCell: {
+        range: { sheetId: weekSheetId, startRowIndex: 2, endRowIndex: 20, startColumnIndex: 11, endColumnIndex: 13 },
+        cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE' } },
+        fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment)'
+      }
+    });
+    const widths = [55, 175, 96, 96, 96, 96, 96, 96, 96, 108, 135, 125, 110, 160, 125];
+    widths.forEach((pixels, index) => width(weekSheetId, index, index + 1, pixels));
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId: weekSheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+        properties: { pixelSize: 42 }, fields: 'pixelSize'
+      }
+    });
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId: weekSheetId, dimension: 'ROWS', startIndex: 1, endIndex: 2 },
+        properties: { pixelSize: 52 }, fields: 'pixelSize'
+      }
+    });
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId: weekSheetId, dimension: 'ROWS', startIndex: 2, endIndex: 3 },
+        properties: { pixelSize: 38 }, fields: 'pixelSize'
+      }
+    });
+  }
+
+  if (requests.length) await sheetsCall(token, spreadsheetId, 'POST', ':batchUpdate', { requests });
+}
+
+async function ensurePayrollTabs(token, spreadsheetId, weekStart, ownerEmail, adminEmails = []) {
   const weekTitle = weeklyTabName(weekStart);
   let metadata = await spreadsheetMetadata(token, spreadsheetId);
   let sheets = Array.isArray(metadata.sheets) ? metadata.sheets : [];
@@ -192,6 +383,7 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart, ownerEmail) {
   const createRank = !rankSheet;
   const createWeek = !weekSheet;
   const requests = [];
+  const protectedEditors = Array.from(new Set([ownerEmail, ...adminEmails].filter(Boolean)));
 
   if (createRank) {
     requests.push({
@@ -277,7 +469,7 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart, ownerEmail) {
           range: { sheetId: rankSheet.sheetId },
           description: RANK_PROTECTION_DESCRIPTION,
           warningOnly: false,
-          editors: { users: ownerEmail ? [ownerEmail] : [], groups: [], domainUsersCanEdit: false }
+          editors: { users: protectedEditors, groups: [], domainUsersCanEdit: false }
         }
       }
     });
@@ -289,7 +481,7 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart, ownerEmail) {
           range: { sheetId: weekSheet.sheetId, startRowIndex: 2, startColumnIndex: 13, endColumnIndex: 15 },
           description: WEEKLY_RANK_PROTECTION_DESCRIPTION,
           warningOnly: false,
-          editors: { users: ownerEmail ? [ownerEmail] : [], groups: [], domainUsersCanEdit: false }
+          editors: { users: protectedEditors, groups: [], domainUsersCanEdit: false }
         }
       }
     });
@@ -303,11 +495,32 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart, ownerEmail) {
           range: { sheetId: weekSheet.sheetId, startRowIndex: 2, startColumnIndex: 1, endColumnIndex: 12 },
           description: WEEKLY_DATA_PROTECTION_DESCRIPTION,
           warningOnly: false,
-          editors: { users: ownerEmail ? [ownerEmail] : [], groups: [], domainUsersCanEdit: false }
+          editors: { users: protectedEditors, groups: [], domainUsersCanEdit: false }
         }
       }
     });
   }
+  // Keep the existing protected ranges editable by the file owner and connected admin accounts.
+  const protectedTargets = [
+    [rankSheetEntry, RANK_PROTECTION_DESCRIPTION],
+    [weekSheetEntry, WEEKLY_RANK_PROTECTION_DESCRIPTION],
+    [weekSheetEntry, WEEKLY_DATA_PROTECTION_DESCRIPTION]
+  ];
+  protectedTargets.forEach(([entry, description]) => {
+    const existing = (entry?.protectedRanges || []).find((item) => item.description === description);
+    if (existing?.protectedRangeId) {
+      protectionRequests.push({
+        updateProtectedRange: {
+          protectedRangeId: existing.protectedRangeId,
+          protectedRange: {
+            warningOnly: false,
+            editors: { users: protectedEditors, groups: [], domainUsersCanEdit: false }
+          },
+          fields: 'warningOnly,editors'
+        }
+      });
+    }
+  });
   if (protectionRequests.length) {
     await sheetsCall(token, spreadsheetId, 'POST', ':batchUpdate', { requests: protectionRequests });
   }
@@ -400,6 +613,10 @@ async function ensurePayrollTabs(token, spreadsheetId, weekStart, ownerEmail) {
     });
   }
 
+  const shiftSheet = sheets.find((sheet) => sheet.properties?.title === TAB)?.properties || null;
+  await applyPayrollSheetDesign(
+    token, spreadsheetId, shiftSheet?.sheetId, rankSheet.sheetId, weekSheet.sheetId
+  );
   return { weekTitle, rankSheetId: rankSheet.sheetId, weekSheetId: weekSheet.sheetId };
 }
 
@@ -413,6 +630,18 @@ async function getPayrollProfile(sql, username) {
   `;
   const profile = rows[0] || null;
   return profile ? { ...profile, payroll: getPayrollInfoForRole(profile.role) } : null;
+}
+
+async function getAdminGoogleEmails(sql) {
+  const rows = await sql`
+    SELECT DISTINCT c.google_email AS email
+    FROM public.users u
+    JOIN public.google_sheets_connections c ON c.username = u.username
+    WHERE u.is_admin = TRUE AND c.status = 'connected'
+      AND c.google_email IS NOT NULL
+    ORDER BY c.google_email
+  `;
+  return rows.map((row) => String(row.email || '').trim()).filter(Boolean);
 }
 
 async function getCurrentWeekStart(sql) {
@@ -489,7 +718,8 @@ async function syncWeeklyWeek(sql, token, connection, profile, weekStart) {
   const totalMoney = profile.payroll?.matched
     ? Math.round(totalHours * profile.payroll.rate * 100) / 100
     : '';
-  const tabs = await ensurePayrollTabs(token, connection.spreadsheet_id, weekStart, connection.google_email);
+  const adminEmails = await getAdminGoogleEmails(sql);
+  const tabs = await ensurePayrollTabs(token, connection.spreadsheet_id, weekStart, connection.google_email, adminEmails);
   const title = tabs.weekTitle;
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'C3:I3'), [dailyValues], 'RAW');
   await updateSheetValues(token, connection.spreadsheet_id, sheetA1Range(title, 'B3:B3'), [[profile.name || connection.username]], 'RAW');
@@ -716,6 +946,80 @@ async function safeGoogleQueueShift(sql, username, shiftLogId) {
 }
 
 function registerGoogleSheetsRoutes({ app, sql, authRequired, needDb, safeError }) {
+  app.get('/api/google-sheets/admin-sheets', authRequired, async (req, res) => {
+    try {
+      if (!needDb(res)) return;
+      if (!req.user?.isAdmin) return res.status(403).json({ error: 'เฉพาะแอดมินเท่านั้นที่ดูชีตของบุคลากรได้' });
+
+      const adminRows = await sql`
+        SELECT google_email AS email
+        FROM public.google_sheets_connections
+        WHERE username = ${req.user.sub} AND status = 'connected'
+          AND google_email IS NOT NULL
+        LIMIT 1
+      `;
+      const currentAdminEmail = String(adminRows[0]?.email || '').trim();
+      if (!currentAdminEmail) {
+        return res.status(409).json({ error: 'กรุณาเชื่อม Google Sheets ของบัญชีแอดมินก่อน เพื่อกำหนดสิทธิ์เข้าดูชีตบุคลากร' });
+      }
+      const adminEmails = await getAdminGoogleEmails(sql);
+      const members = await sql`
+        SELECT u.username, u.display_name AS name, u.role,
+          c.google_email AS "googleEmail", c.spreadsheet_id AS "spreadsheetId",
+          c.spreadsheet_url AS "spreadsheetUrl", c.refresh_token_encrypted AS "refreshTokenEncrypted",
+          c.status AS "googleStatus"
+        FROM public.users u
+        LEFT JOIN public.google_sheets_connections c ON c.username = u.username
+        ORDER BY u.display_name, u.username
+      `;
+
+      const sheets = [];
+      for (const member of members) {
+        const connected = member.googleStatus === 'connected' &&
+          !!member.spreadsheetId && !!member.refreshTokenEncrypted;
+        let accessGranted = false;
+        let sharingError = null;
+        if (connected) {
+          if (String(member.googleEmail || '').toLowerCase() === currentAdminEmail.toLowerCase()) {
+            accessGranted = true;
+          } else {
+            try {
+              const token = await googleRefresh({
+                refresh_token_encrypted: member.refreshTokenEncrypted
+              });
+              for (const email of adminEmails) {
+                if (String(email).toLowerCase() === String(member.googleEmail || '').toLowerCase()) continue;
+                await ensureDriveEditor(token, member.spreadsheetId, email);
+                if (String(email).toLowerCase() === currentAdminEmail.toLowerCase()) accessGranted = true;
+              }
+              // Reconcile existing weekly tabs and grant admins edit rights to protected payroll ranges.
+              await syncAllWeeklyTabsForConnection(sql, {
+                username: member.username,
+                google_email: member.googleEmail,
+                spreadsheet_id: member.spreadsheetId,
+                refresh_token_encrypted: member.refreshTokenEncrypted,
+                status: 'connected'
+              });
+            } catch (err) {
+              sharingError = err.code || err.status || 'sharing_failed';
+              console.error('Admin Google Sheet sharing failed:', member.username, sharingError);
+            }
+          }
+        }
+        sheets.push({
+          username: member.username,
+          name: member.name || member.username,
+          role: member.role || '',
+          connected,
+          accessGranted,
+          spreadsheetUrl: accessGranted ? member.spreadsheetUrl : null,
+          sharingError
+        });
+      }
+      return res.json({ sheets });
+    } catch (err) { safeError(res, err); }
+  });
+
   app.get('/api/google-sheets/status', authRequired, async (req, res) => {
     try {
       if (!needDb(res)) return;
