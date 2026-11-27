@@ -120,6 +120,7 @@ async function apiGoogleSheetsStatus() { return api('/google-sheets/status'); }
 async function apiGoogleSheetsConnect() { return api('/google-sheets/connect', { method: 'POST', body: {} }); }
 async function apiGoogleSheetsDisconnect() { return api('/google-sheets/disconnect', { method: 'POST', body: {} }); }
 async function apiGoogleSheetsRetry() { return api('/google-sheets/retry', { method: 'POST', body: {} }); }
+async function apiLoadAdminSheets() { return api('/google-sheets/admin-sheets'); }
 
 async function apiLoadFund() {
   return api('/fund');
