@@ -39,6 +39,22 @@ function Adapter.GetOnlineCount()
     return #GetPlayers()
 end
 
+-- Identifier enumeration is framework-independent and always runs server-side.
+function Adapter.GetOnlineIdentities()
+    local identities = {}
+    for _, rawSource in ipairs(GetPlayers()) do
+        local source = tonumber(rawSource)
+        local identifierType, identifier = Adapter.GetIdentifier(source)
+        if identifierType and identifier then
+            identities[#identities + 1] = {
+                identifierType = identifierType,
+                identifier = identifier
+            }
+        end
+    end
+    return identities
+end
+
 -- REQUIRED framework-specific implementation:
 -- 1) Verify this is genuinely an EMS player (server-side).
 -- 2) Set the EMS duty state to false using the framework's server API.
