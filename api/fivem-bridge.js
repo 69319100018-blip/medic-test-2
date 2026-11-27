@@ -93,8 +93,19 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
   app.post('/api/fivem/heartbeat', bridgeServerAuth, async (req, res) => {
     try {
       const onlinePlayers = Number(req.body?.onlinePlayers);
-      if (!Number.isInteger(onlinePlayers) || onlinePlayers < 0 || onlinePlayers > 500) {
-        return res.status(400).json({ error: 'onlinePlayers ไม่ถูกต้อง' });
+      const receivedIdentifiers = req.body?.onlineIdentifiers;
+      if (!Number.isInteger(onlinePlayers) || onlinePlayers < 0 || onlinePlayers > 500 ||
+          !Array.isArray(receivedIdentifiers) || receivedIdentifiers.length > 500) {
+        return res.status(400).json({ error: 'ข้อมูล heartbeat ไม่ถูกต้อง' });
+      }
+      const onlineIdentifiers = [];
+      for (const item of receivedIdentifiers) {
+        const identifierType = String(item?.identifierType || '');
+        const identifier = String(item?.identifier || '');
+        if (!IDENTIFIER_TYPES.has(identifierType) || !isValidIdentifier(identifier)) {
+          return res.status(400).json({ error: 'onlineIdentifiers ไม่ถูกต้อง' });
+        }
+        onlineIdentifiers.push({ identifierType, identifier });
       }
       await sql`
         UPDATE public.fivem_bridge_servers
@@ -103,6 +114,35 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
             resource_version = ${String(req.body?.resourceVersion || 'unknown').slice(0, 32)},
             adapter_ready = ${req.body?.adapterReady === true}, updated_at = NOW()
         WHERE server_id = ${req.bridgeServer.serverId} AND enabled = TRUE
+      `;
+      await sql`
+        WITH current_players AS MATERIALIZED (
+          SELECT DISTINCT link.username
+          FROM jsonb_to_recordset(${JSON.stringify(onlineIdentifiers)}::jsonb)
+            AS reported(identifier_type text, identifier text)
+          JOIN public.fivem_player_links AS link
+            ON link.server_id = ${req.bridgeServer.serverId}
+           AND link.identifier_type = reported.identifier_type
+           AND link.identifier = reported.identifier
+        ),
+        upserted AS (
+          INSERT INTO public.fivem_bridge_player_states
+            (server_id, username, is_online, is_on_duty, last_seen_at, updated_at)
+          SELECT ${req.bridgeServer.serverId}, username, TRUE, FALSE, NOW(), NOW()
+          FROM current_players
+          ON CONFLICT (server_id, username) DO UPDATE SET
+            is_online = TRUE, last_seen_at = NOW(), updated_at = NOW()
+          RETURNING username
+        )
+        UPDATE public.fivem_bridge_player_states AS state
+        SET is_online = FALSE, is_on_duty = FALSE,
+            vehicle_net_id = NULL, vehicle_plate = NULL, vehicle_model = NULL,
+            last_event_type = 'player_disconnected', last_event_at = NOW(), updated_at = NOW()
+        WHERE state.server_id = ${req.bridgeServer.serverId}
+          AND state.is_online = TRUE
+          AND NOT EXISTS (
+            SELECT 1 FROM current_players WHERE current_players.username = state.username
+          )
       `;
       await sql`
         DELETE FROM public.fivem_bridge_request_nonces
@@ -206,7 +246,12 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
           SELECT command_row.id, command_row.username
           FROM public.fivem_bridge_commands AS command_row
           WHERE command_row.server_id = ${req.bridgeServer.serverId}
-            AND command_row.status = 'pending' AND command_row.expires_at > NOW()
+            AND command_row.expires_at > NOW()
+            AND command_row.attempts < 3
+            AND (
+              command_row.status = 'pending'
+              OR (command_row.status = 'processing' AND command_row.claimed_at < NOW() - INTERVAL '30 seconds')
+            )
           ORDER BY command_row.requested_at ASC
           LIMIT 20 FOR UPDATE SKIP LOCKED
         )
@@ -341,7 +386,8 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
       }
       const links = await sql`
         SELECT link.server_id AS "serverId", state.is_online AS "isOnline",
-          state.is_on_duty AS "isOnDuty"
+          state.is_on_duty AS "isOnDuty", server.adapter_ready AS "adapterReady",
+          (server.last_heartbeat_at > NOW() - INTERVAL '90 seconds') AS "serverFresh"
         FROM public.fivem_player_links AS link
         JOIN public.fivem_bridge_servers AS server
           ON server.server_id = link.server_id AND server.enabled = TRUE
@@ -352,6 +398,9 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
       if (!links.length) return res.status(404).json({ error: 'บัญชีนี้ยังไม่ได้ผูก Identifier กับ FiveM' });
       if (!links[0].isOnline || !links[0].isOnDuty) {
         return res.status(409).json({ error: 'ผู้เล่นไม่ได้ออนไลน์และอยู่ในสถานะเข้าเวรใน FiveM' });
+      }
+      if (links[0].adapterReady !== true || links[0].serverFresh !== true) {
+        return res.status(409).json({ error: 'FiveM Framework Adapter ยังไม่พร้อมหรือเซิร์ฟเวอร์ไม่ได้ส่ง Heartbeat ล่าสุด' });
       }
       const inserted = await sql`
         INSERT INTO public.fivem_bridge_commands
