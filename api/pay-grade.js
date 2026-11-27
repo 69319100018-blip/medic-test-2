@@ -22,6 +22,8 @@ function normalizeRole(value) {
 // Admin permissions (is_admin) are deliberately not used as a payroll rank.
 const ROLE_TO_PAY_GRADE = new Map([
   ['ผู้อำนวยการแพทย์', 'ผู้อำนวยการ'],
+  ['แอดมินแพทย์', 'ผู้อำนวยการ'],
+  ['แอดมิน', 'ผู้อำนวยการ'],
   ['ผู้อำนวยการ', 'ผู้อำนวยการ'],
   ['รองผู้อำนวยการแพทย์', 'รองผู้อำนวยการ'],
   ['รองผู้อำนวยการ', 'รองผู้อำนวยการ'],
