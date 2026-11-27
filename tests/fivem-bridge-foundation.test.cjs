@@ -44,6 +44,9 @@ test('FiveM routes remain isolated from the current production API entry', () =>
   assert.match(bridgeSource, /req\.user\?\.isAdmin === true/);
   assert.match(bridgeSource, /crypto\.timingSafeEqual/);
   assert.match(bridgeSource, /FOR UPDATE SKIP LOCKED/);
+  assert.match(bridgeSource, /onlineIdentifiers/);
+  assert.match(bridgeSource, /claimed_at < NOW\(\) - INTERVAL '30 seconds'/);
+  assert.match(bridgeSource, /adapterReady !== true/);
   assert.match(bridgeSource, /dutyCleared === true/);
   assert.match(bridgeSource, /vehicleSecured === true/);
 });
