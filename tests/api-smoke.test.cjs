@@ -402,3 +402,15 @@ test('personal Google Sheets integration uses least-privilege OAuth and encrypte
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   assert.ok(pkg.dependencies['@vercel/functions']);
 });
+
+test('dashboard polls only visible data every ten seconds without a full page reload', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  assert.match(app, /DASHBOARD_AUTO_REFRESH_MS = 10000/);
+  assert.match(app, /setInterval\(refreshActiveDashboardData, DASHBOARD_AUTO_REFRESH_MS\)/);
+  assert.match(app, /document\.visibilityState === 'hidden'/);
+  assert.match(app, /dashboardRefreshShouldPause/);
+  assert.match(app, /currentDutyRefreshInterval = setInterval\(loadCurrentDuty, DASHBOARD_AUTO_REFRESH_MS\)/);
+  assert.doesNotMatch(app, /window\.location\.reload\(/);
+});
