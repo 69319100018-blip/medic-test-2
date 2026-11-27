@@ -31,7 +31,7 @@ function sanitizeMetadata(input) {
   const output = {};
   const allowed = new Set([
     'framework', 'job', 'duty', 'vehicleNetId', 'vehiclePlate',
-    'vehicleModel', 'vehicleClass', 'reason', 'source'
+    'vehicleModel', 'vehicleClass', 'reason', 'source', 'dutyCleared', 'vehicleSecured'
   ]);
   for (const [key, value] of Object.entries(input)) {
     if (!allowed.has(key)) continue;
@@ -199,10 +199,12 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
     try {
       const commands = await sql`
         WITH claimable AS (
-          SELECT id FROM public.fivem_bridge_commands
-          WHERE server_id = ${req.bridgeServer.serverId}
-            AND status = 'pending' AND expires_at > NOW()
-          ORDER BY requested_at ASC FOR UPDATE SKIP LOCKED LIMIT 20
+          SELECT command_row.id, command_row.username
+          FROM public.fivem_bridge_commands AS command_row
+          WHERE command_row.server_id = ${req.bridgeServer.serverId}
+            AND command_row.status = 'pending' AND command_row.expires_at > NOW()
+          ORDER BY command_row.requested_at ASC
+          LIMIT 20 FOR UPDATE SKIP LOCKED
         )
         UPDATE public.fivem_bridge_commands AS command
         SET status = 'processing', claimed_at = NOW(),
@@ -210,7 +212,7 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
         FROM claimable
         JOIN public.fivem_player_links AS link
           ON link.server_id = ${req.bridgeServer.serverId}
-         AND link.username = (SELECT username FROM public.fivem_bridge_commands WHERE id = claimable.id)
+         AND link.username = claimable.username
         WHERE command.id = claimable.id
         RETURNING command.id::text AS id, command.command_type AS "commandType",
           command.username, command.payload, command.expires_at AS "expiresAt",
