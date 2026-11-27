@@ -21,6 +21,8 @@
 | `api/fivem-bridge.js` | API module สำหรับ heartbeat, events, command polling/acknowledgement, player links และ admin overview/commands |
 | `migrations/20261127-fivem-bridge-foundation.sql` | ตารางแยกสำหรับเซิร์ฟเวอร์, identifier links, events, state mirror, commands และ anti-replay nonce |
 | `fivem/medic_bridge` | FiveM Resource skeleton พร้อม server-only convars, event queue, heartbeat, command polling และ client helper ให้ออกจากรถ |
+| `js/fivem-control.js` + `css/fivem-control.css` | แผงควบคุมแอดมินแบบ detached ยังไม่ถูกโหลดโดย Dashboard ปัจจุบัน |
+| `fivem/medic_bridge/admin-panel-fragment.html` | HTML fragment ของ FiveM Control Center สำหรับนำไปใส่ Dashboard หลังผ่านการทดสอบ |
 | `tests/fivem-bridge-foundation.test.cjs` | ตรวจเงื่อนไข isolation, security helpers และการปิดใช้งานโดยค่าเริ่มต้น |
 
 ## Security model
@@ -84,6 +86,7 @@ After framework review, migration approval and controlled testing:
 5. Store the plaintext token in FiveM `server.cfg` using `set medic_bridge_token <secret>` (not `setr`); do not expose it to clients or logs.
 6. Add a reviewed, explicit route registration in `api/index.js` and configure a server record with `enabled=false` first. This route registration is deliberately not done in this foundation branch.
 7. Complete the framework adapter and test on a private/staging server. Only then enable bridge traffic.
+8. Add the admin panel fragment to `dashboard.html`, link `css/fivem-control.css` and `js/fivem-control.js`, add an admin-only navigation guard, and call `MedicFiveMControl.init()`. These files are deliberately detached now.
 
 Example server.cfg values (placeholders only):
 
