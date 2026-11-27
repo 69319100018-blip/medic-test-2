@@ -16,6 +16,8 @@ let elapsedInterval = null;
 let loginBgIndex = 0;
 let loginBgInterval = null;
 let centralFund = null;
+let adminGoogleSheetsCache = null;
+let adminGoogleSheetsCacheAt = 0;
 let stockItems = [];
 let stockOffline = true;
 let stockWithdrawals = [];
@@ -1918,6 +1920,22 @@ async function loadPayrollGrades() {
 
     try {
         const members = await apiLoadUsers();
+        const adminViewer = isAdmin(currentUser);
+        let adminSheetMap = new Map();
+        let adminSheetLoadError = '';
+        if (adminViewer && typeof apiLoadAdminSheets === 'function') {
+            try {
+                if (!adminGoogleSheetsCache || Date.now() - adminGoogleSheetsCacheAt > 120000) {
+                    adminGoogleSheetsCache = await apiLoadAdminSheets();
+                    adminGoogleSheetsCacheAt = Date.now();
+                }
+                (adminGoogleSheetsCache?.sheets || []).forEach((sheet) => {
+                    adminSheetMap.set(String(sheet.username), sheet);
+                });
+            } catch (sheetError) {
+                adminSheetLoadError = sheetError.message || 'ไม่สามารถโหลดสิทธิ์ชีตบุคลากรได้';
+            }
+        }
         const entries = Object.entries(members || {}).sort((a, b) =>
             String(a[1]?.name || a[0]).localeCompare(String(b[1]?.name || b[0]), 'th')
         );
@@ -1937,11 +1955,34 @@ async function loadPayrollGrades() {
                 ? rate.toLocaleString('th-TH') + ' บาท'
                 : 'ยังไม่กำหนดอัตรา';
 
+            const sheet = adminViewer ? adminSheetMap.get(username) : null;
+            let sheetAction = '';
+            if (adminViewer) {
+                if (sheet?.accessGranted && sheet?.spreadsheetUrl &&
+                    /^https:\/\/docs\.google\.com\/spreadsheets\//.test(sheet.spreadsheetUrl)) {
+                    sheetAction = `
+                        <a class="payroll-sheet-link" href="${escapeHtml(sheet.spreadsheetUrl)}"
+                           target="_blank" rel="noopener noreferrer">
+                            <i class="bi bi-file-earmark-spreadsheet"></i> ชีตเวลา
+                            <i class="bi bi-box-arrow-up-right payroll-sheet-external"></i>
+                        </a>`;
+                } else if (sheet?.connected) {
+                    sheetAction = `<span class="payroll-sheet-status is-pending" title="${escapeHtml(sheet.sharingError || '')}">
+                        <i class="bi bi-shield-lock"></i> ยังแชร์สิทธิ์ไม่สำเร็จ
+                    </span>`;
+                } else {
+                    sheetAction = `<span class="payroll-sheet-status">
+                        <i class="bi bi-cloud-slash"></i> ยังไม่เชื่อมชีต
+                    </span>`;
+                }
+            }
+
             return `
                 <article class="payroll-member-card" data-payroll-member="${safeUsername}">
                     <div class="payroll-member-identity">
                         <strong>${safeName}</strong>
                         <span>${safeUsername} · Role ในฐานข้อมูล: ${safeRole}</span>
+                        ${sheetAction ? `<div class="payroll-member-actions">${sheetAction}</div>` : ''}
                     </div>
                     <div class="payroll-grade-readonly">
                         <span>ยศค่าตอบแทนที่ระบบจับคู่</span>
@@ -1951,6 +1992,9 @@ async function loadPayrollGrades() {
                 </article>
             `;
         }).join('');
+        if (adminViewer && adminSheetLoadError) {
+            list.insertAdjacentHTML('afterbegin', '<div class="payroll-members-loading is-error">' + escapeHtml(adminSheetLoadError) + '</div>');
+        }
     } catch (err) {
         list.innerHTML = '<div class="payroll-members-loading is-error">' +
             escapeHtml(err.message || 'ไม่สามารถโหลดรายชื่อสมาชิกได้') + '</div>';
