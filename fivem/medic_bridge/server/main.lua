@@ -1,5 +1,6 @@
 local Adapter = MedicBridgeAdapter
 local eventQueue = {}
+local cachedIdentifiers = {}
 local MAX_QUEUED_EVENTS = 200
 local requestSequence = 0
 
@@ -65,7 +66,17 @@ end
 
 local function queueEvent(source, eventType, metadata)
     if not configured() or not Adapter.IsReady() then return false end
-    local identifierType, identifier = Adapter.GetIdentifier(tonumber(source))
+    local playerSource = tonumber(source)
+    local cached = cachedIdentifiers[playerSource]
+    local identifierType, identifier
+    if cached then
+        identifierType, identifier = cached.identifierType, cached.identifier
+    else
+        identifierType, identifier = Adapter.GetIdentifier(playerSource)
+        if identifierType and identifier then
+            cachedIdentifiers[playerSource] = { identifierType = identifierType, identifier = identifier }
+        end
+    end
     if not identifierType or not identifier then
         log('event ignored: player identifier unavailable')
         return false
@@ -178,17 +189,19 @@ exports('ReportVehicleState', function(source, isInsideDutyVehicle, vehicleMetad
     return queueEvent(source, isInsideDutyVehicle and 'vehicle_entered' or 'vehicle_exited', vehicleMetadata)
 end)
 
-AddEventHandler('playerConnecting', function()
-    local source = source
-    SetTimeout(3000, function()
-        if GetPlayerPing(source) > 0 then
-            queueEvent(source, 'player_connected', {})
-        end
-    end)
+AddEventHandler('playerJoining', function()
+    local playerSource = source
+    local identifierType, identifier = Adapter.GetIdentifier(playerSource)
+    if identifierType and identifier then
+        cachedIdentifiers[playerSource] = { identifierType = identifierType, identifier = identifier }
+        queueEvent(playerSource, 'player_connected', {})
+    end
 end)
 
 AddEventHandler('playerDropped', function()
-    queueEvent(source, 'player_disconnected', {})
+    local playerSource = source
+    queueEvent(playerSource, 'player_disconnected', {})
+    cachedIdentifiers[playerSource] = nil
 end)
 
 CreateThread(function()
