@@ -50,6 +50,10 @@
 
 ไม่ควรเดาชื่อ Event หรือชื่อ Resource ของเซิร์ฟเวอร์ เพราะแต่ละเซิร์ฟเวอร์ปรับแต่งไม่เหมือนกัน
 
+## Discord notifications
+
+Duty events (`duty_started` / `duty_ended`) can be sent to a separate Discord channel using the optional server-side environment variable `DISCORD_WEBHOOK_FIVEM`. This key is not configured or changed by this foundation and does not reuse or modify the existing `DISCORD_WEBHOOK_URL`. When the key is absent, event persistence continues and Discord delivery is skipped. Discord delivery errors do not roll back saved FiveM state.
+
 ## API contract ที่เตรียมไว้
 
 ### FiveM server authentication
@@ -85,8 +89,9 @@ After framework review, migration approval and controlled testing:
 4. Calculate its hash using `printf '%s' "$TOKEN" | sha256sum` and insert that SHA-256 value into `fivem_bridge_servers.token_hash`. Never store the plaintext token in Neon or Git.
 5. Store the plaintext token in FiveM `server.cfg` using `set medic_bridge_token <secret>` (not `setr`); do not expose it to clients or logs.
 6. Add a reviewed, explicit route registration in `api/index.js` and configure a server record with `enabled=false` first. This route registration is deliberately not done in this foundation branch.
-7. Complete the framework adapter and test on a private/staging server. Only then enable bridge traffic.
-8. Add the admin panel fragment to `dashboard.html`, link `css/fivem-control.css` and `js/fivem-control.js`, add an admin-only navigation guard, and call `MedicFiveMControl.init()`. These files are deliberately detached now.
+7. Optionally set `DISCORD_WEBHOOK_FIVEM` as a sensitive Production environment variable for the dedicated Discord channel; keep the existing shift webhook untouched.
+8. Complete the framework adapter and test on a private/staging server. Only then enable bridge traffic.
+9. Add the admin panel fragment to `dashboard.html`, link `css/fivem-control.css` and `js/fivem-control.js`, add an admin-only navigation guard, and call `MedicFiveMControl.init()`. These files are deliberately detached now.
 
 Example server.cfg values (placeholders only):
 
