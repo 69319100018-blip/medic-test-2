@@ -155,6 +155,7 @@ local function heartbeat()
     if not configured() then return end
     request('/api/fivem/heartbeat', {
         onlinePlayers = Adapter.GetOnlineCount(),
+        onlineIdentifiers = Adapter.GetOnlineIdentities(),
         framework = Adapter.Name or Config.Framework or 'unknown',
         resourceVersion = Config.ResourceVersion,
         adapterReady = Adapter.IsReady() == true
