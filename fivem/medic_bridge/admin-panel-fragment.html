@@ -1,0 +1,58 @@
+<!-- Optional admin-only Dashboard fragment. Not included in dashboard.html yet. -->
+<section class="panel panel-status hidden" id="fivemControlSection">
+  <div class="panel-header">
+    <div>
+      <p class="label">SERVER OPERATIONS</p>
+      <h2>FiveM Control Center</h2>
+    </div>
+    <button class="btn btn-secondary btn-small" id="btnRefreshFiveM" type="button">
+      <i class="bi bi-arrow-clockwise"></i> รีเฟรชสถานะ
+    </button>
+  </div>
+  <p class="help-text">สถานะและคำสั่งควบคุมจะทำงานเมื่อ API, ฐานข้อมูล และ Framework Adapter ผ่านการเปิดใช้งานแล้ว</p>
+
+  <div class="fivem-server-grid" id="fivemServerList">
+    <div class="fivem-empty">ยังไม่ได้โหลดสถานะเซิร์ฟเวอร์</div>
+  </div>
+
+  <div class="fivem-link-card">
+    <div>
+      <p class="label">ACCOUNT LINKING</p>
+      <h3>ผูกบัญชี Medic กับ FiveM</h3>
+      <p class="help-text">ใช้ Identifier ที่อ่านจากฝั่ง Server เท่านั้น เช่น license หรือ citizenid</p>
+    </div>
+    <form id="fivemPlayerLinkForm" class="fivem-link-form">
+      <label>Server ID
+        <input name="serverId" type="text" maxlength="64" placeholder="medic-main" required>
+      </label>
+      <label>Medic Username
+        <input name="username" type="text" maxlength="64" placeholder="username ใน Medic" required>
+      </label>
+      <label>Identifier Type
+        <select name="identifierType" required>
+          <option value="license">license</option>
+          <option value="license2">license2</option>
+          <option value="fivem">fivem</option>
+          <option value="citizenid">citizenid</option>
+        </select>
+      </label>
+      <label>Identifier
+        <input name="identifier" type="text" maxlength="160" placeholder="license:..." required>
+      </label>
+      <button class="btn btn-primary" type="submit">บันทึกการผูกบัญชี</button>
+    </form>
+  </div>
+
+  <div class="fivem-player-section">
+    <div class="panel-header">
+      <div>
+        <p class="label">LIVE PERSONNEL</p>
+        <h3>สถานะแพทย์ใน FiveM</h3>
+      </div>
+    </div>
+    <div class="fivem-player-list" id="fivemPlayerList">
+      <div class="fivem-empty">ยังไม่มีข้อมูลผู้เล่น</div>
+    </div>
+  </div>
+  <p class="fivem-admin-notice" id="fivemControlNotice" role="status" aria-live="polite"></p>
+</section>
