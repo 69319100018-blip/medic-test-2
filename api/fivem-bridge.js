@@ -40,6 +40,58 @@ function sanitizeMetadata(input) {
   }
   return output;
 }
+
+async function notifyDiscordDutyEvents(items, serverId) {
+  const webhook = process.env.DISCORD_WEBHOOK_FIVEM || '';
+  if (!webhook || !items.length) return;
+  try {
+    const destination = new URL(webhook);
+    if (destination.protocol !== 'https:' ||
+        !['discord.com', 'discordapp.com'].includes(destination.hostname) ||
+        !destination.pathname.startsWith('/api/webhooks/')) return;
+
+    for (let offset = 0; offset < items.length; offset += 10) {
+      const batch = items.slice(offset, offset + 10);
+      const embeds = batch.map((item) => {
+        const onDuty = item.eventType === 'duty_started';
+        const embed = {
+          title: onDuty ? 'แพทย์เข้าเวรจาก FiveM' : 'แพทย์ออกเวรจาก FiveM',
+          color: onDuty ? 0x22c55e : 0xef4444,
+          fields: [
+            { name: 'ชื่อ', value: String(item.name || item.username).slice(0, 256), inline: true },
+            { name: 'Medic Username', value: String(item.username).slice(0, 128), inline: true },
+            { name: 'Role', value: String(item.role || '-').slice(0, 128), inline: true },
+            { name: 'เซิร์ฟเวอร์', value: String(serverId).slice(0, 128), inline: true }
+          ],
+          footer: { text: 'Medic Shift Log · FiveM Bridge' },
+          timestamp: item.occurredAt
+        };
+        if (item.metadata?.vehiclePlate) {
+          embed.fields.push({
+            name: 'รถหน่วยงาน',
+            value: String(item.metadata.vehiclePlate).slice(0, 128),
+            inline: true
+          });
+        }
+        return embed;
+      });
+      const response = await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'Medic Shift Bot',
+          allowed_mentions: { parse: [] },
+          embeds
+        }),
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!response.ok) console.warn('FiveM Discord notification failed:', response.status);
+    }
+  } catch (err) {
+    console.warn('FiveM Discord notification skipped:', err?.name || 'request_failed');
+  }
+}
+
 function requireAdmin(req, res) {
   if (req.user?.isAdmin === true) return true;
   res.status(403).json({ error: 'เฉพาะแอดมินเท่านั้นที่ใช้ FiveM Control API ได้' });
@@ -163,6 +215,7 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
       let accepted = 0;
       let duplicates = 0;
       let unmapped = 0;
+      const dutyNotifications = [];
       for (const raw of events) {
         const eventKey = String(raw?.eventKey || '');
         const identifierType = String(raw?.identifierType || '');
@@ -175,9 +228,11 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
         }
         const metadata = sanitizeMetadata(raw.metadata);
         const mapped = await sql`
-          SELECT username FROM public.fivem_player_links
-          WHERE server_id = ${req.bridgeServer.serverId}
-            AND identifier_type = ${identifierType} AND identifier = ${identifier}
+          SELECT link.username, users.display_name AS name, users.role
+          FROM public.fivem_player_links AS link
+          JOIN public.users ON users.username = link.username
+          WHERE link.server_id = ${req.bridgeServer.serverId}
+            AND link.identifier_type = ${identifierType} AND link.identifier = ${identifier}
           LIMIT 1
         `;
         const username = mapped[0]?.username || null;
@@ -198,6 +253,16 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
         }
         accepted += 1;
         if (!username) continue;
+        if (eventType === 'duty_started' || eventType === 'duty_ended') {
+          dutyNotifications.push({
+            username,
+            name: mapped[0]?.name || username,
+            role: mapped[0]?.role || '-',
+            eventType,
+            occurredAt,
+            metadata
+          });
+        }
 
         const isOnline = eventType !== 'player_disconnected';
         const dutyValue = eventType === 'duty_started' ? true
@@ -233,6 +298,7 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
             last_seen_at = NOW(), updated_at = NOW()
         `;
       }
+      await notifyDiscordDutyEvents(dutyNotifications, req.bridgeServer.serverId);
       return res.json({ ok: true, accepted, duplicates, unmapped });
     } catch (err) {
       return safeError(res, err);
