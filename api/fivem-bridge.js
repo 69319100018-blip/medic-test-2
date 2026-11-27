@@ -241,6 +241,12 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
 
   app.post('/api/fivem/commands/poll', bridgeServerAuth, async (req, res) => {
     try {
+      await sql`
+        UPDATE public.fivem_bridge_commands
+        SET status = 'expired', updated_at = NOW()
+        WHERE server_id = ${req.bridgeServer.serverId}
+          AND status IN ('pending', 'processing') AND expires_at <= NOW()
+      `;
       const commands = await sql`
         WITH claimable AS (
           SELECT command_row.id, command_row.username
