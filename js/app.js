@@ -32,7 +32,6 @@ let currentDutyElapsedInterval = null;
 let dashboardAutoRefreshInterval = null;
 let dashboardAutoRefreshBusy = false;
 let dashboardUsersLastRefreshAt = 0;
-let dashboardMembersLastRefreshAt = 0;
 const DASHBOARD_AUTO_REFRESH_MS = 10000;
 const DASHBOARD_USERS_REFRESH_MS = 60000;
 
@@ -367,13 +366,9 @@ async function refreshActiveDashboardData() {
         let userDirectoryChanged = false;
         if (usesUserDirectory) {
             try {
-                if (panelId === 'membersSection') {
-                    if (Date.now() - dashboardMembersLastRefreshAt >= DASHBOARD_USERS_REFRESH_MS) {
-                        dashboardMembersLastRefreshAt = Date.now();
-                        await loadPayrollGrades();
-                    }
-                } else {
-                    userDirectoryChanged = await refreshDashboardUserDirectory();
+                userDirectoryChanged = await refreshDashboardUserDirectory();
+                if (panelId === 'membersSection' && userDirectoryChanged) {
+                    await loadPayrollGrades();
                 }
             } catch (err) {
                 console.warn('[Dashboard refresh] user directory:', err?.message || 'failed');
