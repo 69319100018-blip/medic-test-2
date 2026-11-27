@@ -5149,3 +5149,46 @@ body.dashboard-body.theme-dark::after {
     gap: 12px;
   }
 }
+
+
+/* Admin-only links to each member's privately owned Google attendance sheet. */
+.page-dashboard .payroll-member-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+.page-dashboard .payroll-sheet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid #3978a5;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #214f70, #1a3a56);
+  color: #eef8ff !important;
+  font-size: .78rem;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow: 0 3px 10px rgba(8, 28, 46, .15);
+  transition: transform .16s ease, background .16s ease, border-color .16s ease;
+}
+.page-dashboard .payroll-sheet-link:hover {
+  transform: translateY(-1px);
+  border-color: #75b6df;
+  background: linear-gradient(135deg, #2b668f, #224f73);
+  color: #fff !important;
+}
+.page-dashboard .payroll-sheet-external { font-size: .68rem; opacity: .8; }
+.page-dashboard .payroll-sheet-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-text-muted);
+  font-size: .73rem;
+  font-weight: 700;
+}
+.page-dashboard .payroll-sheet-status.is-pending { color: #f2c778; }
