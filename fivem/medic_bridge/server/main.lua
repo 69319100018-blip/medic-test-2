@@ -191,11 +191,14 @@ end)
 
 AddEventHandler('playerJoining', function()
     local playerSource = source
-    local identifierType, identifier = Adapter.GetIdentifier(playerSource)
-    if identifierType and identifier then
-        cachedIdentifiers[playerSource] = { identifierType = identifierType, identifier = identifier }
-        queueEvent(playerSource, 'player_connected', {})
-    end
+    SetTimeout(2000, function()
+        if GetPlayerPing(playerSource) <= 0 then return end
+        local identifierType, identifier = Adapter.GetIdentifier(playerSource)
+        if identifierType and identifier then
+            cachedIdentifiers[playerSource] = { identifierType = identifierType, identifier = identifier }
+            queueEvent(playerSource, 'player_connected', {})
+        end
+    end)
 end)
 
 AddEventHandler('playerDropped', function()
