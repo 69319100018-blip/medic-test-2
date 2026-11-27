@@ -104,6 +104,10 @@ function registerFiveMBridgeRoutes({ app, sql, authRequired, needDb, safeError }
             adapter_ready = ${req.body?.adapterReady === true}, updated_at = NOW()
         WHERE server_id = ${req.bridgeServer.serverId} AND enabled = TRUE
       `;
+      await sql`
+        DELETE FROM public.fivem_bridge_request_nonces
+        WHERE expires_at < NOW() - INTERVAL '1 hour'
+      `;
       return res.json({ ok: true, serverTime: new Date().toISOString() });
     } catch (err) {
       return safeError(res, err);
